@@ -53,7 +53,7 @@ export default function JobDetail({
 
   if (!job) {
     return (
-      <main className="mx-auto max-w-4xl px-6 py-10 text-sm text-zinc-500">
+      <main className="mx-auto max-w-5xl px-6 py-10 text-sm text-zinc-500">
         Loading…
       </main>
     );
@@ -62,7 +62,7 @@ export default function JobDetail({
   const active = job.status === STATUS.RUNNING || job.status === STATUS.QUEUED;
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
+    <main className="mx-auto max-w-5xl px-6 py-10">
       <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
         ← All jobs
       </Link>

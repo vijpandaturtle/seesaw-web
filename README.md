@@ -8,14 +8,22 @@ each stage, and read the artifacts each one produced.
 
 ## What this is and isn't
 
-This is only the UI. It reads and writes the job store; it never runs an agent.
-Queueing a job here inserts a row — a Python worker on the seesaw side claims it:
+This is the UI. The agents themselves live in the seesaw repo, and a job is
+always executed by a Python worker process — never by this app. What differs is
+who starts that worker.
+
+**Local mode** — set `SEESAW_REPO_DIR` and the dashboard launches a worker
+itself whenever you create or approve a job. Nothing else to run.
+
+**Queue-only mode** — leave it unset, as you would when this is deployed away
+from the agents. Jobs are written as `queued` and wait for a poller:
 
 ```bash
 python -m orchestrator.src.worker --poll
 ```
 
-Without a poller running, jobs sit in `queued` forever.
+The dashboard says which mode it's in, so a job that never starts reads as a
+missing worker rather than a bug.
 
 ## Setup
 
@@ -23,12 +31,12 @@ Needs a seesaw checkout, since it reads that repo's job store and artifacts.
 
 ```bash
 npm install
-cp .env.example .env.local     # point SEESAW_OUTPUTS_DIR at your checkout
+cp .env.example .env.local     # point it at your checkout
 npm run dev
 ```
 
-`SEESAW_OUTPUTS_DIR` defaults to `../seesaw/outputs`, so if the two repos sit
-side by side you can skip the env file entirely.
+`SEESAW_OUTPUTS_DIR` defaults to `../seesaw/outputs`, so side-by-side checkouts
+need it only for `SEESAW_REPO_DIR`.
 
 ## Layout
 
@@ -39,6 +47,7 @@ app/api/artifact/         serves plans, bundles, critiques, and plots
 app/page.tsx              job list
 app/jobs/[id]/            job detail
 lib/db.ts                 every query — the one module that changes on deploy
+lib/worker.ts             starting a worker, when running alongside the agents
 lib/types.ts              shapes and constants shared with client components
 ```
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import useSWR from "swr";
 
+import { PageHeader, RunnerNotice } from "@/components/shell";
 import { StageBar, StatusBadge, relativeTime } from "@/components/status";
 import { STATUS, type Job } from "@/lib/types";
 
@@ -21,9 +22,11 @@ const MODELS = [
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function JobsPage() {
-  const { data, mutate } = useSWR<{ jobs: Job[] }>("/api/jobs", fetcher, {
-    refreshInterval: 3000,
-  });
+  const { data, mutate } = useSWR<{ jobs: Job[]; runner?: string }>(
+    "/api/jobs",
+    fetcher,
+    { refreshInterval: 3000 },
+  );
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [model, setModel] = useState("gpt2");
@@ -49,19 +52,21 @@ export default function JobsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <header className="mb-8 flex items-baseline justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Research Jobs</h1>
-          <p className="mt-1 text-sm text-zinc-400">Scout → Lens → Quill</p>
-        </div>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 hover:bg-white"
-        >
-          {open ? "Cancel" : "New job"}
-        </button>
-      </header>
+    <main className="mx-auto max-w-5xl px-6 py-10">
+      <PageHeader
+        title="Research Jobs"
+        subtitle="Scout plans it, Lens runs the experiments, Quill critiques the result."
+        actions={
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 transition hover:bg-white"
+          >
+            {open ? "Cancel" : "New job"}
+          </button>
+        }
+      />
+
+      <RunnerNotice runner={data?.runner} />
 
       {open && (
         <form
@@ -100,16 +105,10 @@ export default function JobsPage() {
               {busy ? "Starting…" : "Start job"}
             </button>
           </div>
-          <p className="text-xs text-zinc-500">
-            This only queues the job — a worker has to be polling for it to run:{" "}
-            <code className="text-zinc-400">
-              python -m orchestrator.src.worker --poll
-            </code>
-          </p>
         </form>
       )}
 
-      <div className="mb-6 flex gap-6 text-sm">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <Stat label="Jobs" value={jobs.length} />
         <Stat label="Running" value={count(STATUS.RUNNING) + count(STATUS.QUEUED)} />
         <Stat label="Needs you" value={count(STATUS.AWAITING)} />
@@ -156,9 +155,9 @@ export default function JobsPage() {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div>
-      <div className="text-xl font-semibold">{value}</div>
-      <div className="text-xs text-zinc-500">{label}</div>
+    <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2.5">
+      <div className="text-xl font-semibold tabular-nums">{value}</div>
+      <div className="mt-0.5 text-xs text-zinc-500">{label}</div>
     </div>
   );
 }
