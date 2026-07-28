@@ -1,0 +1,122 @@
+{
+  "total": 56,
+  "ran_offline": 30,
+  "mismatches": [],
+  "coverage": {
+    "lens.causal_correlational_honesty": [
+      "fail",
+      "pass"
+    ],
+    "lens.interpretation_faithfulness": [
+      "fail",
+      "pass"
+    ],
+    "lens.numeric_correctness": [
+      "fail",
+      "pass"
+    ],
+    "lens.operational_cost": [
+      "fail",
+      "pass"
+    ],
+    "lens.plan_execution_fidelity": [
+      "fail",
+      "pass"
+    ],
+    "lens.prose_data_consistency": [
+      "fail",
+      "pass"
+    ],
+    "lens.robustness": [
+      "fail",
+      "pass"
+    ],
+    "lens.tool_execution_valid": [
+      "fail",
+      "pass"
+    ],
+    "quill.calibration": [
+      "fail",
+      "pass"
+    ],
+    "quill.false_positive_rate": [
+      "fail",
+      "pass"
+    ],
+    "quill.false_positives_spurious": [
+      "fail",
+      "pass"
+    ],
+    "quill.followup_executable": [
+      "fail",
+      "pass"
+    ],
+    "quill.followup_relevant": [
+      "fail",
+      "pass"
+    ],
+    "quill.gap_precision": [
+      "fail",
+      "pass"
+    ],
+    "quill.gap_recall": [
+      "fail",
+      "pass"
+    ],
+    "quill.matches_expert": [
+      "na"
+    ],
+    "quill.stability": [
+      "fail",
+      "pass"
+    ],
+    "quill.statistical_validity": [
+      "fail",
+      "pass"
+    ],
+    "scout.citations_exist": [
+      "fail",
+      "pass"
+    ],
+    "scout.citations_support_hypothesis": [
+      "fail",
+      "pass"
+    ],
+    "scout.efficiency": [
+      "fail",
+      "pass"
+    ],
+    "scout.groundedness": [
+      "fail",
+      "pass"
+    ],
+    "scout.hypothesis_specificity": [
+      "fail",
+      "pass"
+    ],
+    "scout.plan_well_formed": [
+      "fail",
+      "pass"
+    ],
+    "scout.researcher_would_run": [
+      "na"
+    ],
+    "scout.search_triggering": [
+      "fail",
+      "pass"
+    ],
+    "scout.target_model_appropriate": [
+      "fail",
+      "pass"
+    ],
+    "scout.tool_capability_honesty": [
+      "fail",
+      "pass"
+    ],
+    "scout.tools_called_properly": [
+      "fail",
+      "pass"
+    ]
+  },
+  "checked_at": 1785222590.911387
+}

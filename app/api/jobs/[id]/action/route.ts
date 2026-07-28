@@ -19,13 +19,13 @@ export async function POST(request: Request, { params }: Ctx) {
     action?: string;
   };
 
-  if (!getJob(id)) {
+  if (!(await getJob(id))) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
   switch (action) {
     case "approve":
-      if (!approveJob(id)) {
+      if (!(await approveJob(id))) {
         return NextResponse.json(
           { error: "job is no longer awaiting approval" },
           { status: 409 },
@@ -34,7 +34,7 @@ export async function POST(request: Request, { params }: Ctx) {
       startWorker(id);          // no-op when a poller owns execution
       break;
     case "retry":
-      if (!retryJob(id)) {
+      if (!(await retryJob(id))) {
         return NextResponse.json(
           { error: "job is not in a failed state" },
           { status: 409 },
@@ -43,7 +43,7 @@ export async function POST(request: Request, { params }: Ctx) {
       startWorker(id);
       break;
     case "cancel":
-      cancelJob(id);
+      await cancelJob(id);
       break;
     default:
       return NextResponse.json(
@@ -52,5 +52,5 @@ export async function POST(request: Request, { params }: Ctx) {
       );
   }
 
-  return NextResponse.json({ job: getJob(id) });
+  return NextResponse.json({ job: await getJob(id) });
 }

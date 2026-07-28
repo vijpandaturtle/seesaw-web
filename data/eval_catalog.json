@@ -1,0 +1,158 @@
+{
+  "tasks": [
+    {
+      "id": "copy_suppression_1",
+      "target": "pipeline",
+      "question": "Which head in GPT-2 Small suppresses naive token copying, and how does it operate?",
+      "graders": [
+        "deterministic_tests",
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "docstring_circuit_1",
+      "target": "pipeline",
+      "question": "What circuit predicts the next argument name in a Python docstring in the 4-layer attention-only model?",
+      "graders": [
+        "deterministic_tests",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "factual_recall_rome_1",
+      "target": "pipeline",
+      "question": "Where does GPT-2 XL store the factual association 'The Eiffel Tower is located in Paris'?",
+      "graders": [
+        "deterministic_tests",
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "gender_bias_1",
+      "target": "pipeline",
+      "question": "Which attention heads mediate occupation-based gender bias in GPT-2 Small?",
+      "graders": [
+        "deterministic_tests",
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "greater_than_1",
+      "target": "pipeline",
+      "question": "How does GPT-2 Small compute greater-than comparisons for year completions?",
+      "graders": [
+        "deterministic_tests",
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "induction_heads_1",
+      "target": "pipeline",
+      "question": "Which heads in GPT-2 Small implement induction (in-context copying of repeated sequences)?",
+      "graders": [
+        "deterministic_tests",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "ioi_circuit_1",
+      "target": "pipeline",
+      "question": "What attention heads mediate indirect object identification in GPT-2 Small?",
+      "graders": [
+        "deterministic_tests",
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "lens_causal_language_trap_1",
+      "target": "lens",
+      "question": "Which heads are associated with the IOI behaviour in GPT-2 Small? (attribution only)",
+      "graders": [
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "quill_followup_loop_1",
+      "target": "quill",
+      "question": null,
+      "graders": [
+        "state_check",
+        "llm_rubric",
+        "deterministic_tests"
+      ]
+    },
+    {
+      "id": "quill_strong_bundle_1",
+      "target": "quill",
+      "question": null,
+      "graders": [
+        "state_check",
+        "llm_rubric"
+      ]
+    },
+    {
+      "id": "quill_weak_bundle_1",
+      "target": "quill",
+      "question": null,
+      "graders": [
+        "state_check",
+        "llm_rubric"
+      ]
+    },
+    {
+      "id": "scout_tool_bias_sae_1",
+      "target": "scout",
+      "question": "Which sparse autoencoder features in GPT-2 Small activate specifically on formal or academic writing style?\n",
+      "graders": [
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "scout_tool_bias_steering_1",
+      "target": "scout",
+      "question": "Is there a linear direction in GPT-2 Small's residual stream that represents sentiment, and does steering along it reliably flip the output sentiment?\n",
+      "graders": [
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "scout_underspecified_1",
+      "target": "scout",
+      "question": "Why do language models hallucinate?",
+      "graders": [
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    },
+    {
+      "id": "successor_heads_1",
+      "target": "pipeline",
+      "question": "Does GPT-2 Small have successor heads that increment across different ordinal sequence types?",
+      "graders": [
+        "deterministic_tests",
+        "llm_rubric",
+        "state_check",
+        "tool_calls"
+      ]
+    }
+  ]
+}

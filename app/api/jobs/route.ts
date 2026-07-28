@@ -6,7 +6,7 @@ import { runnerMode, startWorker } from "@/lib/worker";
 export const runtime = "nodejs";
 
 export async function GET() {
-  return NextResponse.json({ jobs: listJobs(), runner: runnerMode() });
+  return NextResponse.json({ jobs: await listJobs(), runner: runnerMode() });
 }
 
 /**
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (!question) {
     return NextResponse.json({ error: "question is required" }, { status: 400 });
   }
-  const job = createJob(
+  const job = await createJob(
     question,
     typeof body?.model === "string" && body.model ? body.model : "gpt2",
     Boolean(body?.autoApprove),

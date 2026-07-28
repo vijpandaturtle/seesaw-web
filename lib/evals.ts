@@ -14,7 +14,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { OUTPUTS_DIR } from "./db";
+import { readDir } from "./paths";
 
 export type GraderResult = {
   criterion: string;
@@ -51,7 +51,7 @@ export type FixtureHealth = {
   checked_at?: number;
 };
 
-const RUNS_DIR = path.join(OUTPUTS_DIR, "eval_runs");
+const runsDir = () => path.join(readDir(), "eval_runs");
 
 function readJson<T>(file: string): T | null {
   try {
@@ -63,6 +63,7 @@ function readJson<T>(file: string): T | null {
 
 /** Persisted task runs, newest first. */
 export function listRuns(): EvalRun[] {
+  const RUNS_DIR = runsDir();
   if (!fs.existsSync(RUNS_DIR)) return [];
   const runs: EvalRun[] = [];
   for (const name of fs.readdirSync(RUNS_DIR)) {
@@ -75,13 +76,13 @@ export function listRuns(): EvalRun[] {
 
 export function catalog(): CatalogTask[] {
   const parsed = readJson<{ tasks: CatalogTask[] }>(
-    path.join(OUTPUTS_DIR, "eval_catalog.json"),
+    path.join(readDir(), "eval_catalog.json"),
   );
   return parsed?.tasks ?? [];
 }
 
 export function fixtureHealth(): FixtureHealth | null {
-  return readJson<FixtureHealth>(path.join(OUTPUTS_DIR, "fixture_check.json"));
+  return readJson<FixtureHealth>(path.join(readDir(), "fixture_check.json"));
 }
 
 /**

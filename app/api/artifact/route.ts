@@ -3,7 +3,8 @@ import path from "node:path";
 
 import { NextResponse } from "next/server";
 
-import { OUTPUTS_DIR, getJob } from "@/lib/db";
+import { getJob } from "@/lib/db";
+import { OUTPUTS_DIR, readDir } from "@/lib/paths";
 
 export const runtime = "nodejs";
 
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
   let target: string | null = null;
 
   if (jobId && kind && kind in KINDS) {
-    const job = getJob(jobId);
+    const job = await getJob(jobId);
     target = job?.[KINDS[kind as keyof typeof KINDS]] ?? null;
   } else if (file) {
     target = file;
@@ -42,8 +43,11 @@ export async function GET(request: Request) {
 
   // Anything outside outputs/ is out of bounds, however it was addressed.
   const resolved = path.resolve(target);
-  const root = path.resolve(OUTPUTS_DIR);
-  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+  const roots = [path.resolve(OUTPUTS_DIR), path.resolve(readDir())];
+  const allowed = roots.some(
+    (root) => resolved === root || resolved.startsWith(root + path.sep),
+  );
+  if (!allowed) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
