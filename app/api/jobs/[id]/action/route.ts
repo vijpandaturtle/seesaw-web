@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { approveJob, cancelJob, getJob, retryJob } from "@/lib/db";
-import { startWorker } from "@/lib/worker";
+import { startStage } from "@/lib/runner";
 
 export const runtime = "nodejs";
 
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: Ctx) {
           { status: 409 },
         );
       }
-      startWorker(id);          // no-op when a poller owns execution
+      await startStage(id);     // no-op when a poller owns execution
       break;
     case "retry":
       if (!(await retryJob(id))) {
@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: Ctx) {
           { status: 409 },
         );
       }
-      startWorker(id);
+      await startStage(id);
       break;
     case "cancel":
       await cancelJob(id);

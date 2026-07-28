@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createJob, listJobs } from "@/lib/db";
-import { runnerMode, startWorker } from "@/lib/worker";
+import { runnerMode, startStage } from "@/lib/runner";
 
 export const runtime = "nodejs";
 
@@ -24,6 +24,6 @@ export async function POST(request: Request) {
     typeof body?.model === "string" && body.model ? body.model : "gpt2",
     Boolean(body?.autoApprove),
   );
-  const started = startWorker(job.id);
+  const started = await startStage(job.id);
   return NextResponse.json({ job, started }, { status: 201 });
 }

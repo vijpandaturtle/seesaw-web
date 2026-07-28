@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 
 import { getJob } from "@/lib/db";
 import { OUTPUTS_DIR, readDir } from "@/lib/paths";
+import { ARTIFACT_BASE_URL } from "@/lib/runner";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,27 @@ export async function GET(request: Request) {
   const kind = url.searchParams.get("kind");
   const jobId = url.searchParams.get("job");
   const file = url.searchParams.get("file");
+
+  // Deployed, artifacts sit on a Modal volume rather than this filesystem;
+  // the runner's endpoint is the only thing that can read them.
+  if (ARTIFACT_BASE_URL) {
+    const remote = new URL(ARTIFACT_BASE_URL);
+    if (jobId && kind) {
+      remote.searchParams.set("job", jobId);
+      remote.searchParams.set("kind", kind);
+    } else if (file) {
+      remote.searchParams.set("path", file);
+    }
+    const upstream = await fetch(remote, { cache: "no-store" });
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers: {
+        "content-type":
+          upstream.headers.get("content-type") ?? "application/octet-stream",
+        "cache-control": "no-store",
+      },
+    });
+  }
 
   let target: string | null = null;
 
