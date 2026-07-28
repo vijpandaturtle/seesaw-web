@@ -40,14 +40,21 @@ export default function JobDetail({
     refreshInterval: 3000,
   });
   const [tab, setTab] = useState<Tab>("plan");
+  const [actionError, setActionError] = useState<string | null>(null);
   const job = data?.job;
 
   async function act(action: string) {
-    await fetch(`/api/jobs/${id}/action`, {
+    setActionError(null);
+    const res = await fetch(`/api/jobs/${id}/action`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action }),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setActionError(body.error ?? `${action} failed (HTTP ${res.status}).`);
+      return;
+    }
     mutate();
   }
 
@@ -84,6 +91,12 @@ export default function JobDetail({
           </span>
         </div>
       </header>
+
+      {actionError && (
+        <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {actionError}
+        </p>
+      )}
 
       {job.error && (
         <pre className="mb-6 overflow-x-auto rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200">

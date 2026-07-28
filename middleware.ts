@@ -1,37 +1,33 @@
 /**
- * Password gate for the whole dashboard.
+ * Read-only by default; writes need a key.
  *
- * This app can queue research jobs, and those spend real Anthropic and GPU
- * credit — so a public URL is an open tab on someone else's account. Vercel's
- * own password protection is a paid feature; this is the plan-independent
- * equivalent.
+ * The dashboard is public so it can be linked to, but queueing a job spends
+ * real Anthropic credit and GPU time, and deleting one destroys a research
+ * record. So anything that reads is open and anything that changes state is
+ * not.
  *
- * Set SITE_PASSWORD to enable it. Unset (local development) it lets
- * everything through, so nothing changes when running against your own
- * machine.
+ * Set WRITE_KEY to lock writes. Unset (local development) everything is
+ * allowed, so running against your own machine is unchanged.
+ *
+ * Two ways to hold the key: visit ?key=… once to store a cookie, or send an
+ * x-seesaw-key header (for curl and scripts).
  */
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const COOKIE = "seesaw_auth";
+const COOKIE = "seesaw_write";
+const HEADER = "x-seesaw-key";
+
+/** Methods that only read. Everything else changes the job store. */
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 export function middleware(request: NextRequest) {
-  const expected = process.env.SITE_PASSWORD;
-  if (!expected) return NextResponse.next();
+  const expected = process.env.WRITE_KEY;
+  const { searchParams } = request.nextUrl;
 
-  const { pathname, searchParams } = request.nextUrl;
-
-  // The login page itself, and Next's own assets, must stay reachable.
-  if (pathname.startsWith("/_next") || pathname === "/favicon.ico") {
-    return NextResponse.next();
-  }
-
-  if (request.cookies.get(COOKIE)?.value === expected) {
-    return NextResponse.next();
-  }
-
-  // ?key=… sets the cookie once, so a link can carry the password.
-  if (searchParams.get("key") === expected) {
+  // ?key=… stores the cookie, then reloads without it in the URL. Handled
+  // before the method check so the link works on a normal page visit.
+  if (expected && searchParams.get("key") === expected) {
     const url = request.nextUrl.clone();
     url.searchParams.delete("key");
     const response = NextResponse.redirect(url);
@@ -44,27 +40,24 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Basic auth so a browser prompts, and curl can pass -u.
-  const header = request.headers.get("authorization");
-  if (header?.startsWith("Basic ")) {
-    const decoded = atob(header.slice(6));
-    const password = decoded.slice(decoded.indexOf(":") + 1);
-    if (password === expected) {
-      const response = NextResponse.next();
-      response.cookies.set(COOKIE, expected, {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: true,
-        maxAge: 60 * 60 * 24 * 30,
-      });
-      return response;
-    }
+  if (!expected || SAFE_METHODS.has(request.method)) {
+    return NextResponse.next();
   }
 
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: { "WWW-Authenticate": 'Basic realm="Seesaw"' },
-  });
+  const holdsKey =
+    request.cookies.get(COOKIE)?.value === expected ||
+    request.headers.get(HEADER) === expected;
+
+  if (holdsKey) return NextResponse.next();
+
+  return NextResponse.json(
+    {
+      error:
+        "This dashboard is read-only. Running a job spends real API and GPU " +
+        "credit, so creating, approving, cancelling, and deleting need a key.",
+    },
+    { status: 403 },
+  );
 }
 
 export const config = {

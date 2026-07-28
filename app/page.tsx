@@ -32,6 +32,7 @@ export default function JobsPage() {
   const [model, setModel] = useState("gpt2");
   const [autoApprove, setAutoApprove] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const jobs = data?.jobs ?? [];
   const count = (s: string) => jobs.filter((j) => j.status === s).length;
@@ -40,12 +41,18 @@ export default function JobsPage() {
     e.preventDefault();
     if (!question.trim()) return;
     setBusy(true);
-    await fetch("/api/jobs", {
+    setError(null);
+    const res = await fetch("/api/jobs", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ question, model, autoApprove }),
     });
     setBusy(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? `Could not start the job (HTTP ${res.status}).`);
+      return;
+    }
     setQuestion("");
     setOpen(false);
     mutate();
@@ -105,6 +112,11 @@ export default function JobsPage() {
               {busy ? "Starting…" : "Start job"}
             </button>
           </div>
+          {error && (
+            <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              {error}
+            </p>
+          )}
         </form>
       )}
 
