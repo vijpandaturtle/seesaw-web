@@ -29,6 +29,12 @@ export function Masthead() {
           <Link href="/" className="text-zinc-400 transition hover:text-zinc-100">
             Jobs
           </Link>
+          <Link
+            href="/evals"
+            className="text-zinc-400 transition hover:text-zinc-100"
+          >
+            Evaluation
+          </Link>
           <a
             href="https://github.com/vijpandaturtle/seesaw"
             target="_blank"
