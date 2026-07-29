@@ -4,60 +4,112 @@ Dashboard for [Seesaw](https://github.com/vijpandaturtle/seesaw), a multi-agent
 framework for automated mechanistic interpretability research.
 
 Submit a research question, watch Scout → Lens → Quill work through it, approve
-each stage, and read the artifacts each one produced.
+each stage, read what each produced, and see how the eval suite scores the
+agents.
 
 ## What this is and isn't
 
-This is the UI. The agents themselves live in the seesaw repo, and a job is
-always executed by a Python worker process — never by this app. What differs is
-who starts that worker.
+This is the UI. The agents live in the seesaw repo, and a job is always executed
+by a Python worker — never by this app, which only reads and writes the job
+store. What differs between setups is who starts that worker.
 
-**Local mode** — set `SEESAW_REPO_DIR` and the dashboard launches a worker
-itself whenever you create or approve a job. Nothing else to run.
+| Mode | When | Set |
+|---|---|---|
+| **Modal** | Deployed. The API spawns a stage on Modal and returns immediately while it runs for minutes or hours | `MODAL_RUN_STAGE_URL` |
+| **Local** | Running beside a seesaw checkout; the API launches a worker process itself | `SEESAW_REPO_DIR` |
+| **Queue-only** | Neither. Jobs sit in `queued` until something claims them | — |
 
-**Queue-only mode** — leave it unset, as you would when this is deployed away
-from the agents. Jobs are written as `queued` and wait for a poller:
+Queue-only needs a poller on the seesaw side:
 
 ```bash
 python -m orchestrator.src.worker --poll
 ```
 
-The dashboard says which mode it's in, so a job that never starts reads as a
-missing worker rather than a bug.
+The dashboard shows which mode it's in, so a job that never starts reads as a
+missing runner rather than a bug.
 
 ## Setup
 
-Needs a seesaw checkout, since it reads that repo's job store and artifacts.
-
 ```bash
 npm install
-cp .env.example .env.local     # point it at your checkout
+cp .env.example .env.local
 npm run dev
 ```
 
-`SEESAW_OUTPUTS_DIR` defaults to `../seesaw/outputs`, so side-by-side checkouts
-need it only for `SEESAW_REPO_DIR`.
+With no `DATABASE_URL`, the job store is the seesaw checkout's local SQLite
+file; `SEESAW_OUTPUTS_DIR` defaults to `../seesaw/outputs`, so side-by-side
+checkouts need almost no configuration. Set `SEESAW_REPO_DIR` as well and
+creating a job will actually run it.
+
+## Environment
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres job store. Unset means the local SQLite file |
+| `SEESAW_OUTPUTS_DIR` | A seesaw checkout's `outputs/`, for reading artifacts locally |
+| `SEESAW_REPO_DIR` | Enables local mode — the API spawns a worker itself |
+| `MODAL_RUN_STAGE_URL` | Modal's `start` endpoint; enables Modal mode |
+| `MODAL_ARTIFACT_URL` | Modal's artifact endpoint, proxied by `/api/artifact` |
+| `MODAL_INVOKE_TOKEN` | Must match the runner's `RUNNER_KEY` |
+| `WRITE_KEY` | Gates every write. Unset, everything is allowed |
+
+## Reads open, writes gated
+
+Deployed, the dashboard is public to read and gated to change: queueing a job
+spends real Anthropic credit and GPU time, and deleting one destroys a research
+record.
+
+`middleware.ts` enforces that by HTTP method rather than per route, so a new
+mutating endpoint is protected by default instead of by remembering. Hold the
+key by visiting `?key=…` once, which stores a cookie, or send an `x-seesaw-key`
+header. Unset `WRITE_KEY` and the gate is inert, which is what local development
+wants.
+
+## Evaluation page
+
+`/evals` shows fixture health, the criterion × task score matrix, per-run grader
+results, and the task catalog.
+
+The eval suite runs in Python, so anything shown here is read from files rather
+than computed. Locally those come from a seesaw checkout; deployed they come
+from the committed snapshot in `data/`, which is how results reach a deployment
+at all. Refresh it with:
+
+```bash
+./scripts/sync-eval-data.sh
+```
 
 ## Layout
 
 ```
 app/api/jobs/             list, create, and per-job read/delete
 app/api/jobs/[id]/action  approve, retry, cancel
-app/api/artifact/         serves plans, bundles, critiques, and plots
+app/api/artifact/         plans, bundles, critiques, plots — proxied to Modal when deployed
+app/api/evals/            fixture health, score matrix, runs, catalog
 app/page.tsx              job list
 app/jobs/[id]/            job detail
-lib/db.ts                 every query — the one module that changes on deploy
-lib/worker.ts             starting a worker, when running alongside the agents
+app/evals/                evaluation dashboard
+lib/db.ts                 every query against the job store
+lib/runner.ts             choosing and invoking a runner
+lib/paths.ts              local checkout vs committed snapshot
 lib/types.ts              shapes and constants shared with client components
+middleware.ts             the write gate
 ```
 
-`lib/types.ts` is separate from `lib/db.ts` on purpose: a client component
-importing a value from the driver module would pull SQLite into the browser
-bundle.
+`lib/types.ts` is separate from `lib/db.ts` deliberately: a client component
+importing a value from the driver module would pull the database driver into the
+browser bundle.
 
 ## Deploying
 
-SQLite only works while this app and the workers share a machine. Hosting the
-UI apart from the agents means replacing `lib/db.ts` with a hosted database
-(Turso keeps the SQL identical; Postgres needs placeholder changes) and serving
-artifacts from object storage rather than local paths.
+The full runbook — Neon, both Modal apps, secrets, and the Vercel environment —
+lives in the seesaw repo:
+[DOCS.md → Deployment](https://github.com/vijpandaturtle/seesaw/blob/main/DOCS.md#deployment).
+
+Two things specific to this app:
+
+- **Use the project alias, not the deployment URL.** Vercel forces its own SSO
+  on `<project>-<hash>-<team>.vercel.app` whatever your settings, so the write
+  gate never runs there. `vercel alias ls` shows the stable one.
+- **`data/` must be refreshed and committed** for the eval page to show anything
+  after the suite is re-run. A deployment cannot reach the machine that ran it.
