@@ -25,9 +25,15 @@ export function Masthead() {
           Automated mechanistic interpretability research
         </span>
 
-        <nav className="ml-auto flex items-center gap-4 text-xs">
+        <nav className="ml-auto flex items-center gap-3 text-xs whitespace-nowrap sm:gap-4">
           <Link href="/" className="text-zinc-400 transition hover:text-zinc-100">
             Jobs
+          </Link>
+          <Link
+            href="/models"
+            className="text-zinc-400 transition hover:text-zinc-100"
+          >
+            Models
           </Link>
           <Link
             href="/evals"

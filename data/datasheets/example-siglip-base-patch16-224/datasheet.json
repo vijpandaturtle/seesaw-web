@@ -1,0 +1,75 @@
+{
+  "datasheet_schema": 1,
+  "slug": "example-siglip-base-patch16-224",
+  "title": "SigLIP Base/16 (224)",
+  "status": "example",
+  "summary": "**Example data**, invented. Hand-assembled without recorded preprocessing or a pinned weights revision, to show how the Atlas flags a datasheet that can't be safely compared.",
+  "generated_at": "2026-10-25T09:30:00Z",
+  "provenance": {
+    "model_id": "google/siglip-base-patch16-224",
+    "revision": null,
+    "model_type": "siglip",
+    "adapter": "SigLIPAdapter",
+    "capabilities": [],
+    "dtype": "bfloat16",
+    "hooks": [
+      "vision.blocks.*.resid_post"
+    ],
+    "preprocessing": null,
+    "seed": null,
+    "versions": {
+      "python": "3.12.4",
+      "lever-interp": "0.1.0"
+    },
+    "created_at": "2026-10-25T09:28:40+00:00"
+  },
+  "sections": [
+    {
+      "id": "overview",
+      "title": "At a glance",
+      "view": "metrics",
+      "data": {
+        "items": [
+          {
+            "label": "Vision layers",
+            "value": 12
+          },
+          {
+            "label": "Patch tokens",
+            "value": 196,
+            "note": "14 × 14, no CLS"
+          }
+        ]
+      }
+    },
+    {
+      "id": "patch-norms",
+      "title": "Residual norm by layer",
+      "view": "layer_curve",
+      "caption": "Same probe as CLIP's, but not comparable until preprocessing is recorded.",
+      "data": {
+        "x_label": "layer",
+        "y_label": "‖resid‖₂",
+        "series": [
+          {
+            "name": "patch tokens (mean)",
+            "y": [
+              6.0,
+              8.4,
+              10.8,
+              13.2,
+              15.6,
+              18.0,
+              20.4,
+              22.8,
+              25.2,
+              27.6,
+              30.0,
+              32.4
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
