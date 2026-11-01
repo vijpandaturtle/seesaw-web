@@ -35,12 +35,6 @@ export function Masthead() {
           >
             Models
           </Link>
-          <Link
-            href="/evals"
-            className="text-zinc-400 transition hover:text-zinc-100"
-          >
-            Evaluation
-          </Link>
           <a
             href="https://github.com/vijpandaturtle/seesaw"
             target="_blank"

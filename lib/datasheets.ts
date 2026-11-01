@@ -6,7 +6,7 @@
  *   outputs/datasheets/<slug>/datasheet.json   ← the only file read here
  *   outputs/datasheets/<slug>/results/...      ← lever Result dirs; ignored
  *
- * Like the eval exports, everything is optional. A missing directory is an
+ * Everything is optional. A missing directory is an
  * empty gallery and an unparseable file is skipped — neither throws.
  */
 import fs from "node:fs";

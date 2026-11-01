@@ -1,5 +1,5 @@
 /**
- * Where run artifacts and eval exports are read from.
+ * Where run artifacts and datasheets are read from.
  *
  * Deployed, this app has no access to the machine that ran the jobs, so
  * anything file-based has to be bundled into the repo at `data/`. Locally,
