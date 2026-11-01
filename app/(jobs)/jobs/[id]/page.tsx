@@ -96,7 +96,10 @@ export default function JobDetail({
   const isPathway = job.kind === "pathway";
   const tabs = TABS[isPathway ? "pathway" : "research"];
   const tab = chosenTab && tabs.some(([k]) => k === chosenTab) ? chosenTab : tabs[0][0];
-  const pathway = isPathway ? pathwayByName(jobParams(job).pathway) : undefined;
+  // A research job's pathway is Scout's starting plan; a pathway job (from
+  // before Scout chose the inputs) ran it directly.
+  const pathwayName = jobParams(job).pathway;
+  const pathway = pathwayName ? pathwayByName(pathwayName) : undefined;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -104,7 +107,7 @@ export default function JobDetail({
         <div className="flex items-center gap-2">
           <code className="text-xs text-zinc-500">{job.id}</code>
           <StatusBadge status={job.status} />
-          {isPathway && (
+          {(isPathway || pathway) && (
             <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
               /{pathway?.command ?? "pathway"}
             </span>

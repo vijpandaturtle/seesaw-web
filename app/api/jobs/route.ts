@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createJob, listJobs } from "@/lib/db";
-import { pathwayByName, pathwayTitle, validatePathway } from "@/lib/pathways";
+import { pathwayByName } from "@/lib/pathways";
 import { runnerMode, startStage } from "@/lib/runner";
 
 export const runtime = "nodejs";
@@ -11,45 +11,49 @@ export async function GET() {
 }
 
 /**
- * Insert a queued row, then start a worker on it if we're running alongside
- * the agents. Deployed away from them, the row just waits for a poller.
+ * Insert a queued research job, then start a worker on it if we're running
+ * alongside the agents. Deployed away from them, the row just waits for a poller.
  *
- * Two shapes:
- *   { question, model, autoApprove }                 a research job
- *   { pathway, params, model, question? }            a pathway job
+ * Body: { question, model, autoApprove, pathway? }. A pathway is Scout's
+ * starting plan; Scout chooses its inputs, so none are taken here.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const model =
     typeof body?.model === "string" && body.model ? body.model : "gpt2";
-  let question = typeof body?.question === "string" ? body.question.trim() : "";
-
-  let pathway: { name: string; params: Record<string, unknown> } | undefined;
-  if (body?.pathway !== undefined) {
-    const params =
-      body.params && typeof body.params === "object" && !Array.isArray(body.params)
-        ? (body.params as Record<string, unknown>)
-        : {};
-    const problems = validatePathway(body.pathway, params, model);
-    if (problems.length) {
-      return NextResponse.json({ error: problems.join("; ") }, { status: 400 });
-    }
-    pathway = { name: body.pathway, params };
-    question ||= pathwayTitle(pathwayByName(body.pathway)!, params);
-  } else if (!question) {
+  const question = typeof body?.question === "string" ? body.question.trim() : "";
+  if (!question) {
     return NextResponse.json({ error: "question is required" }, { status: 400 });
+  }
+
+  let pathway: string | undefined;
+  if (body?.pathway !== undefined && body.pathway !== null) {
+    const found = pathwayByName(body.pathway);
+    if (!found) {
+      return NextResponse.json(
+        { error: `unknown pathway ${JSON.stringify(body.pathway)}` },
+        { status: 400 },
+      );
+    }
+    if (found.models && !found.models.includes(model)) {
+      return NextResponse.json(
+        { error: `${found.label} only runs on ${found.models.join(", ")}` },
+        { status: 400 },
+      );
+    }
+    pathway = found.name;
   }
 
   let job;
   try {
     job = await createJob(question, model, Boolean(body?.autoApprove), pathway);
   } catch (error) {
-    // The only expected failure: a store whose schema predates pathway jobs.
+    // The only expected failure: a store whose schema predates the params column.
     if (/column .*(kind|params)/.test(String(error))) {
       return NextResponse.json(
         {
           error:
-            "The job store hasn't been upgraded for pathway jobs yet. Start a " +
+            "The job store hasn't been upgraded for pathways yet. Start a " +
             "seesaw worker once (it adds the columns), then try again.",
         },
         { status: 503 },

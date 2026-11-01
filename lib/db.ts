@@ -76,8 +76,8 @@ export async function getJob(id: string): Promise<Job | null> {
 }
 
 /**
- * Insert a queued job at its first stage. Pathway inputs must already have
- * been checked with validatePathway; this only stores them.
+ * Insert a queued research job at Scout. A pathway, if given, is stored in
+ * params for Scout to start its plan from; Scout picks the inputs.
  *
  * The kind and params columns are added by the Python side, which owns the
  * table's schema; on a store no current worker has opened yet, this insert
@@ -87,21 +87,17 @@ export async function createJob(
   question: string,
   model: string,
   autoApprove: boolean,
-  pathway?: { name: string; params: Record<string, unknown> },
+  pathway?: string,
 ): Promise<Job> {
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const ts = now();
-  const kind = pathway ? "pathway" : "research";
-  const stage = pathway ? "pathway" : "scout";
-  const params = pathway
-    ? JSON.stringify({ pathway: pathway.name, ...pathway.params })
-    : null;
+  const params = pathway ? JSON.stringify({ pathway }) : null;
   await query(
     `INSERT INTO jobs (id, question, model, status, stage, auto_approve,
                        created_at, updated_at, kind, params)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [id, question.trim(), model, STATUS.QUEUED, stage, autoApprove ? 1 : 0,
-     ts, ts, kind, params],
+    [id, question.trim(), model, STATUS.QUEUED, "scout", autoApprove ? 1 : 0,
+     ts, ts, "research", params],
   );
   return (await getJob(id))!;
 }

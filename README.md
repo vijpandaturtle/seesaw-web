@@ -3,9 +3,9 @@
 Dashboard for [Seesaw](https://github.com/vijpandaturtle/seesaw), a multi-agent
 framework for automated mechanistic interpretability research.
 
-Ask a research question and watch Scout → Lens → Quill work through it, or type
-`/` to run one of seesaw's hand-coded pathways. Approve each stage and read what
-each produced.
+Ask a research question and watch Scout → Lens → Quill work through it,
+optionally typing `/` to give Scout one of seesaw's pathways to start from.
+Approve each stage and read what each produced.
 
 ## What this is and isn't
 
@@ -46,15 +46,15 @@ creating a job will actually run it.
 The home page is a composer, with past jobs in a sidebar beside it:
 
 - **Plain text** is a research question for Scout → Lens → Quill.
-- **`/`** opens the pathways: `/circuit-discovery`, `/attribute-audit`,
-  `/feature-explain`. Each takes prompt sets and answer tokens rather than a
-  question, has a **Load example** button with its known-answer case, and runs as
-  one stage with no approval gate. The job page shows its verdict, evidence,
-  findings and plots.
+- **`/`** attaches a pathway to the question: `/circuit-discovery`,
+  `/attribute-audit`, `/feature-explain`. It's still a Scout → Lens → Quill job;
+  the pathway is stored as `{"pathway": name}` in the job's `params`, and Scout
+  starts its plan from it and decides the prompts and answer tokens itself.
 
-`lib/pathways.ts` mirrors `seesaw/pathways/catalog.py` (names, inputs, checks).
-Change both together. Pathway jobs need the `kind` and `params` columns, which
-the seesaw side adds the first time a current worker opens the store.
+`lib/pathways.ts` mirrors `seesaw/pathways/catalog.py` (names, inputs). Change
+both together. Jobs need the `kind` and `params` columns, which the seesaw side
+adds the first time a current worker opens the store. Older pathway jobs, which
+took hand-entered inputs and ran as one stage, still render on their job pages.
 
 ## Environment
 
@@ -109,10 +109,10 @@ app/api/jobs/             list, create, and per-job read/delete
 app/api/jobs/[id]/action  approve, retry, cancel
 app/api/artifact/         plans, bundles, critiques, plots — proxied to Modal when deployed
 app/api/models/           datasheet index and per-model datasheet
-app/(jobs)/page.tsx       new-job composer (questions and /pathways)
+app/(jobs)/page.tsx       new-job composer (questions, optional /pathway)
 app/(jobs)/jobs/[id]/     job detail
 app/(jobs)/layout.tsx     the past-jobs sidebar around both
-lib/pathways.ts           pathway inputs and checks, mirrored from seesaw
+lib/pathways.ts           pathway catalog, mirrored from seesaw
 app/models/               Model Atlas gallery and datasheet pages
 components/datasheet-views.tsx  section renderers (inline SVG charts)
 lib/db.ts                 every query against the job store
