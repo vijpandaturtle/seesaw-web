@@ -50,7 +50,16 @@ function kindLabel(job: Job): string {
   return pathwayByName(jobParams(job).pathway)?.command ?? "pathway";
 }
 
-function JobList({ onNavigate }: { onNavigate?: () => void }) {
+function JobList({
+  onNavigate,
+  onHide,
+  hideLabel,
+}: {
+  onNavigate?: () => void;
+  /** Collapses the column (desktop) or closes the drawer (phone). */
+  onHide: () => void;
+  hideLabel: string;
+}) {
   const pathname = usePathname();
   const { data, error } = useSWR<{ jobs: Job[] }>("/api/jobs", fetcher, {
     refreshInterval: 3000,
@@ -59,11 +68,11 @@ function JobList({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="p-3">
+      <div className="flex items-center gap-2 p-3">
         <Link
           href="/"
           onClick={onNavigate}
-          className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm transition ${
+          className={`flex min-w-0 flex-1 items-center gap-2 rounded-md border px-3 py-2 text-sm transition ${
             pathname === "/"
               ? "border-zinc-700 bg-zinc-800/60 text-zinc-100"
               : "border-zinc-800 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900"
@@ -74,6 +83,14 @@ function JobList({ onNavigate }: { onNavigate?: () => void }) {
           </span>
           New job
         </Link>
+        <button
+          onClick={onHide}
+          aria-label={hideLabel}
+          title={hideLabel}
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-zinc-500 transition hover:bg-zinc-900 hover:text-zinc-100"
+        >
+          <span aria-hidden>«</span>
+        </button>
       </div>
 
       <nav aria-label="Past jobs" className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -135,13 +152,44 @@ function JobList({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+const COLLAPSED_KEY = "seesaw.jobSidebar.collapsed";
+
+/** Whether this viewer last left the column collapsed; storage may be blocked. */
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(collapsed: boolean) {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Not remembered, but the toggle still works for this visit.
+  }
+}
+
 /**
  * Past jobs beside every Jobs page, like a chat app's history. A fixed column
- * from md up; below that, a button opens it as a drawer.
+ * from md up, which collapses to a narrow rail and remembers that per viewer;
+ * below md, a button opens it as a drawer.
  */
 export function JobSidebar() {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+
+  // Read after mount so the server render and first client render agree.
+  useEffect(() => setCollapsed(readCollapsed()), []);
+
+  const toggleCollapsed = () => {
+    setCollapsed((c) => {
+      writeCollapsed(!c);
+      return !c;
+    });
+  };
 
   // Close the drawer when the route changes underneath it (back button, etc.).
   useEffect(() => setOpen(false), [pathname]);
@@ -155,8 +203,38 @@ export function JobSidebar() {
 
   return (
     <>
-      <aside className="sticky top-[53px] hidden h-[calc(100vh-53px)] w-64 shrink-0 border-r border-zinc-800/80 md:block">
-        <JobList />
+      <aside
+        className={`sticky top-[53px] hidden h-[calc(100vh-53px)] shrink-0 border-r border-zinc-800/80 md:block ${
+          collapsed ? "w-12" : "w-64"
+        }`}
+      >
+        {collapsed ? (
+          <div className="flex flex-col items-center gap-2 py-3">
+            <button
+              onClick={toggleCollapsed}
+              aria-label="Expand past jobs"
+              aria-expanded={false}
+              title="Expand past jobs"
+              className="grid h-9 w-9 place-items-center rounded-md text-zinc-500 transition hover:bg-zinc-900 hover:text-zinc-100"
+            >
+              <span aria-hidden>»</span>
+            </button>
+            <Link
+              href="/"
+              aria-label="New job"
+              title="New job"
+              className={`grid h-9 w-9 place-items-center rounded-md border transition ${
+                pathname === "/"
+                  ? "border-zinc-700 bg-zinc-800/60 text-zinc-100"
+                  : "border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100"
+              }`}
+            >
+              <span aria-hidden>+</span>
+            </Link>
+          </div>
+        ) : (
+          <JobList onHide={toggleCollapsed} hideLabel="Collapse past jobs" />
+        )}
       </aside>
 
       <div className="sticky top-[53px] z-10 border-b border-zinc-800/80 bg-zinc-950/90 px-4 py-2 backdrop-blur md:hidden">
@@ -177,7 +255,11 @@ export function JobSidebar() {
             className="absolute inset-0 bg-black/60"
           />
           <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] border-r border-zinc-800 bg-zinc-950">
-            <JobList onNavigate={() => setOpen(false)} />
+            <JobList
+              onNavigate={() => setOpen(false)}
+              onHide={() => setOpen(false)}
+              hideLabel="Close past jobs"
+            />
           </div>
         </div>
       )}
