@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     template: "%s · Seesaw",
   },
   description:
-    "Dashboard for Seesaw — automated mechanistic interpretability research",
+    "Seesaw — making pragmatic interpretability accessible.",
 };
 
 export default function RootLayout({
