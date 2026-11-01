@@ -1,6 +1,6 @@
 # Model Atlas: interpretability datasheets for open models
 
-**Status:** draft spec, stage 1 only · **Repo:** seesaw-web · **Depends on:** a seesaw datasheet job (not built yet), lever `Result`/`Provenance` (drafted in lever-interp, uncommitted)
+**Status:** draft spec, stage 1 only · **Repo:** seesaw-web · **Depends on:** seesaw's [research methodology](https://github.com/vijpandaturtle/seesaw/blob/main/docs/research-methodology.md) (draft, not built), a seesaw datasheet job (not built yet), lever `Result`/`Provenance` (drafted in lever-interp, uncommitted)
 
 ## Why
 
@@ -22,7 +22,7 @@ useful on its own and tests the format.
 | Layer | Does | Doesn't |
 |---|---|---|
 | lever | Runs techniques, returns `Result` dirs with `Provenance` | Decide what a datasheet contains |
-| seesaw | Datasheet job: picks probes (the tiered methodology), runs them, writes `datasheet.json` | Render anything |
+| seesaw | Datasheet job ("survey mode" in the [methodology](https://github.com/vijpandaturtle/seesaw/blob/main/docs/research-methodology.md)): runs the standard tier probes, writes `datasheet.json` | Render anything |
 | **seesaw-web** (this spec) | Reads `datasheet.json` and renders it | Run models, read tensors, compute anything |
 
 Same pattern as `/evals`: Python writes files, this app reads them. Locally from the seesaw
@@ -91,7 +91,7 @@ Python side.
 }
 ```
 
-What each tier means belongs to seesaw. This app only uses `tier` to group and order sections.
+What each tier means belongs to seesaw: it's the evidence tier from the [research methodology](https://github.com/vijpandaturtle/seesaw/blob/main/docs/research-methodology.md) (1 descriptive, 2 estimate, 3 causal, 4 controlled). That methodology is a draft and seesaw doesn't implement it yet, so until it does, datasheets are hand-made or examples. This app only uses `tier` to group and order sections.
 
 ### Views
 
