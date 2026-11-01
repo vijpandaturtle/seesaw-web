@@ -3,9 +3,9 @@
 Dashboard for [Seesaw](https://github.com/vijpandaturtle/seesaw), a multi-agent
 framework for automated mechanistic interpretability research.
 
-Submit a research question, watch Scout → Lens → Quill work through it, approve
-each stage, read what each produced, and see how the eval suite scores the
-agents.
+Ask a research question and watch Scout → Lens → Quill work through it, or type
+`/` to run one of seesaw's hand-coded pathways. Approve each stage and read what
+each produced.
 
 ## What this is and isn't
 
@@ -41,11 +41,27 @@ file; `SEESAW_OUTPUTS_DIR` defaults to `../seesaw/outputs`, so side-by-side
 checkouts need almost no configuration. Set `SEESAW_REPO_DIR` as well and
 creating a job will actually run it.
 
+## Starting a job
+
+The home page is a composer, with past jobs in a sidebar beside it:
+
+- **Plain text** is a research question for Scout → Lens → Quill.
+- **`/`** opens the pathways: `/circuit-discovery`, `/attribute-audit`,
+  `/feature-explain`. Each takes prompt sets and answer tokens rather than a
+  question, has a **Load example** button with its known-answer case, and runs as
+  one stage with no approval gate. The job page shows its verdict, evidence,
+  findings and plots.
+
+`lib/pathways.ts` mirrors `seesaw/pathways/catalog.py` (names, inputs, checks).
+Change both together. Pathway jobs need the `kind` and `params` columns, which
+the seesaw side adds the first time a current worker opens the store.
+
 ## Environment
 
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Postgres job store. Unset means the local SQLite file |
+| `SEESAW_DB_SCHEMA` | Use the jobs table in this schema, like the Python side does: an isolated copy for trial runs |
 | `SEESAW_OUTPUTS_DIR` | A seesaw checkout's `outputs/`, for reading artifacts locally |
 | `SEESAW_REPO_DIR` | Enables local mode — the API spawns a worker itself |
 | `MODAL_RUN_STAGE_URL` | Modal's `start` endpoint; enables Modal mode |
@@ -64,20 +80,6 @@ mutating endpoint is protected by default instead of by remembering. Hold the
 key by visiting `?key=…` once, which stores a cookie, or send an `x-seesaw-key`
 header. Unset `WRITE_KEY` and the gate is inert, which is what local development
 wants.
-
-## Evaluation page
-
-`/evals` shows fixture health, the criterion × task score matrix, per-run grader
-results, and the task catalog.
-
-The eval suite runs in Python, so anything shown here is read from files rather
-than computed. Locally those come from a seesaw checkout; deployed they come
-from the committed snapshot in `data/`, which is how results reach a deployment
-at all. Refresh it with:
-
-```bash
-./scripts/sync-eval-data.sh
-```
 
 ## Model Atlas
 
@@ -106,11 +108,11 @@ The two `example-*` datasheets in `data/` hold invented numbers and carry an
 app/api/jobs/             list, create, and per-job read/delete
 app/api/jobs/[id]/action  approve, retry, cancel
 app/api/artifact/         plans, bundles, critiques, plots — proxied to Modal when deployed
-app/api/evals/            fixture health, score matrix, runs, catalog
 app/api/models/           datasheet index and per-model datasheet
-app/page.tsx              job list
-app/jobs/[id]/            job detail
-app/evals/                evaluation dashboard
+app/(jobs)/page.tsx       new-job composer (questions and /pathways)
+app/(jobs)/jobs/[id]/     job detail
+app/(jobs)/layout.tsx     the past-jobs sidebar around both
+lib/pathways.ts           pathway inputs and checks, mirrored from seesaw
 app/models/               Model Atlas gallery and datasheet pages
 components/datasheet-views.tsx  section renderers (inline SVG charts)
 lib/db.ts                 every query against the job store
@@ -137,5 +139,5 @@ Two things specific to this app:
 - **Use the project alias, not the deployment URL.** Vercel forces its own SSO
   on `<project>-<hash>-<team>.vercel.app` whatever your settings, so the write
   gate never runs there. `vercel alias ls` shows the stable one.
-- **`data/` must be refreshed and committed** for the eval and models pages to
-  show anything new after seesaw re-runs. A deployment cannot reach the machine that ran it.
+- **`data/` must be refreshed and committed** for the models page to show
+  anything new after seesaw re-runs. A deployment cannot reach the machine that ran it.

@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { use, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import useSWR from "swr";
 
 import { StageBar, StatusBadge, relativeTime } from "@/components/status";
-import { STATUS, type Job } from "@/lib/types";
+import { pathwayByName } from "@/lib/pathways";
+import { STATUS, jobParams, type Job } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const textFetcher = (url: string) =>
@@ -19,7 +19,33 @@ const GATE_PROMPT: Record<string, string> = {
   quill: "Send these experiment results to Quill for critique?",
 };
 
-type Tab = "plan" | "results" | "critique" | "log";
+type Tab = "plan" | "results" | "critique" | "result" | "inputs" | "report" | "log";
+
+const TABS: Record<string, [Tab, string][]> = {
+  research: [
+    ["plan", "Research plan"],
+    ["results", "Experiment results"],
+    ["critique", "Critique"],
+    ["log", "Worker log"],
+  ],
+  pathway: [
+    ["result", "Result"],
+    ["inputs", "Inputs"],
+    ["report", "Report"],
+    ["log", "Worker log"],
+  ],
+};
+
+/** What a pathway job's worker writes as its bundle (seesaw worker.py). */
+type PathwayOutput = {
+  pathway: string;
+  verdict: string | null;
+  evidence: string[];
+  findings: Record<string, unknown>;
+  stopped_early: string | null;
+  steps: string[];
+  plot_paths: string[];
+};
 
 type ExperimentResult = {
   name: string;
@@ -39,7 +65,7 @@ export default function JobDetail({
   const { data, mutate } = useSWR<{ job: Job }>(`/api/jobs/${id}`, fetcher, {
     refreshInterval: 3000,
   });
-  const [tab, setTab] = useState<Tab>("plan");
+  const [chosenTab, setTab] = useState<Tab | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const job = data?.job;
 
@@ -67,17 +93,22 @@ export default function JobDetail({
   }
 
   const active = job.status === STATUS.RUNNING || job.status === STATUS.QUEUED;
+  const isPathway = job.kind === "pathway";
+  const tabs = TABS[isPathway ? "pathway" : "research"];
+  const tab = chosenTab && tabs.some(([k]) => k === chosenTab) ? chosenTab : tabs[0][0];
+  const pathway = isPathway ? pathwayByName(jobParams(job).pathway) : undefined;
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
-        ← All jobs
-      </Link>
-
-      <header className="mt-4 mb-6">
+    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <header className="mb-6">
         <div className="flex items-center gap-2">
           <code className="text-xs text-zinc-500">{job.id}</code>
           <StatusBadge status={job.status} />
+          {isPathway && (
+            <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
+              /{pathway?.command ?? "pathway"}
+            </span>
+          )}
         </div>
         <h1 className="mt-2 text-xl font-semibold">{job.question}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -145,14 +176,7 @@ export default function JobDetail({
       )}
 
       <nav className="mb-4 flex gap-1 border-b border-zinc-800">
-        {(
-          [
-            ["plan", "Research plan"],
-            ["results", "Experiment results"],
-            ["critique", "Critique"],
-            ["log", "Worker log"],
-          ] as [Tab, string][]
-        ).map(([key, label]) => (
+        {tabs.map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -178,6 +202,14 @@ export default function JobDetail({
         <MarkdownArtifact
           url={job.report_path ? `/api/artifact?job=${job.id}&kind=report` : null}
           empty="No critique yet — Quill hasn't finished."
+        />
+      )}
+      {tab === "result" && <PathwayResultView job={job} />}
+      {tab === "inputs" && <PathwayInputs job={job} />}
+      {tab === "report" && (
+        <MarkdownArtifact
+          url={job.report_path ? `/api/artifact?job=${job.id}&kind=report` : null}
+          empty="No report yet — the pathway hasn't finished."
         />
       )}
       {tab === "log" && (
@@ -269,6 +301,118 @@ function Results({ job }: { job: Job }) {
           </details>
         );
       })}
+    </div>
+  );
+}
+
+function PathwayResultView({ job }: { job: Job }) {
+  const { data } = useSWR<PathwayOutput | null>(
+    job.bundle_path ? `/api/artifact?job=${job.id}&kind=bundle` : null,
+    jsonFetcher,
+  );
+
+  if (!job.bundle_path) {
+    return (
+      <p className="text-sm text-zinc-500">
+        {job.status === STATUS.FAILED
+          ? "The pathway failed before producing a result — see the error above and the worker log."
+          : "No result yet — the pathway is still running."}
+      </p>
+    );
+  }
+  if (data === undefined) return <p className="text-sm text-zinc-500">Loading…</p>;
+  if (data === null) return <p className="text-sm text-zinc-500">The result file is missing.</p>;
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="text-xs text-zinc-500">Verdict</div>
+        <div className="mt-1 font-mono text-lg text-zinc-100">{data.verdict ?? "—"}</div>
+        {data.stopped_early && (
+          <p className="mt-2 text-xs text-amber-300/80">Stopped early: {data.stopped_early}</p>
+        )}
+      </div>
+
+      {data.evidence.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-medium text-zinc-200">Evidence</h2>
+          <ul className="space-y-1.5 text-sm text-zinc-300">
+            {data.evidence.map((e, i) => (
+              <li key={i} className="flex gap-2">
+                <span aria-hidden className="text-zinc-600">–</span>
+                {e}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {Object.keys(data.findings).length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-medium text-zinc-200">Findings</h2>
+          <dl className="divide-y divide-zinc-800/60 rounded-lg border border-zinc-800 text-xs">
+            {Object.entries(data.findings).map(([k, v]) => (
+              <div key={k} className="grid gap-1 px-3 py-2 sm:grid-cols-[12rem_1fr]">
+                <dt className="font-mono text-zinc-500">{k}</dt>
+                <dd className="font-mono break-words whitespace-pre-wrap text-zinc-300">
+                  {typeof v === "string" ? v : JSON.stringify(v, null, 1)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      {data.steps.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-medium text-zinc-200">Steps run</h2>
+          <ol className="flex flex-wrap items-center gap-1.5 text-xs">
+            {data.steps.map((s, i) => (
+              <li key={s} className="flex items-center gap-1.5">
+                {i > 0 && <span className="text-zinc-700">→</span>}
+                <span className="rounded border border-zinc-700/60 px-2 py-0.5 font-mono text-zinc-300">
+                  {s}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      {data.plot_paths.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-zinc-200">Plots</h2>
+          {data.plot_paths.map((p) => (
+            <img
+              key={p}
+              src={`/api/artifact?file=${encodeURIComponent(p)}`}
+              alt={p.split("/").pop() ?? "plot"}
+              className="w-full rounded border border-zinc-800"
+            />
+          ))}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function PathwayInputs({ job }: { job: Job }) {
+  const { pathway: _name, ...inputs } = jobParams(job);
+  const fields = pathwayByName(_name)?.fields ?? [];
+  const label = (key: string) => fields.find((f) => f.key === key)?.label ?? key;
+
+  return (
+    <div className="space-y-4">
+      {Object.entries(inputs).map(([key, value]) => (
+        <section key={key}>
+          <h2 className="mb-1 text-xs font-medium text-zinc-400">{label(key)}</h2>
+          <pre className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-300">
+            {Array.isArray(value)
+              ? value.map((v) => JSON.stringify(v)).join("\n")
+              : JSON.stringify(value)}
+          </pre>
+        </section>
+      ))}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { STAGES, STATUS, type Job } from "@/lib/types";
+import { STATUS, completedStages, stagesFor, type Job } from "@/lib/types";
 
 export const STATUS_LABEL: Record<string, { icon: string; text: string; cls: string }> = {
   [STATUS.QUEUED]: { icon: "○", text: "queued", cls: "text-zinc-400 bg-zinc-800/60" },
@@ -25,16 +25,13 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-/** scout → lens → quill, with each stage's state. */
+/** The job's stages (scout → lens → quill, or a pathway's one), with each one's state. */
 export function StageBar({ job }: { job: Job }) {
-  const done =
-    job.stage === "done"
-      ? [...STAGES]
-      : STAGES.slice(0, Math.max(0, STAGES.indexOf(job.stage as (typeof STAGES)[number])));
+  const done = completedStages(job);
 
   return (
     <div className="flex items-center gap-1.5 text-xs">
-      {STAGES.map((stage, i) => {
+      {stagesFor(job.kind).map((stage, i) => {
         const isDone = done.includes(stage);
         const isCurrent = stage === job.stage;
         const failed = isCurrent && job.status === STATUS.FAILED;

@@ -10,6 +10,20 @@ export const STAGES = ["scout", "lens", "quill"] as const;
 
 export type Stage = (typeof STAGES)[number];
 
+/**
+ * What a job runs. "research" is Scout → Lens → Quill on a question; a
+ * "pathway" job runs one of seesaw's hand-coded pathways as a single stage
+ * with no human gate. Mirrors STAGES_BY_KIND in seesaw's shared/db/jobs.py.
+ */
+export const STAGES_BY_KIND: Record<string, readonly string[]> = {
+  research: STAGES,
+  pathway: ["pathway"],
+};
+
+export function stagesFor(kind: string | undefined): readonly string[] {
+  return STAGES_BY_KIND[kind ?? "research"] ?? STAGES;
+}
+
 export const STATUS = {
   QUEUED: "queued",
   RUNNING: "running",
@@ -36,11 +50,25 @@ export type Job = {
   cancel_requested: number;
   worker_id: string | null;
   log_tail: string | null;
+  /** Absent on rows written before pathway jobs existed. */
+  kind?: string;
+  /** JSON: a pathway job's inputs, including `pathway`. */
+  params?: string | null;
 };
 
+export function jobParams(job: Job): Record<string, unknown> {
+  if (!job.params) return {};
+  try {
+    return JSON.parse(job.params);
+  } catch {
+    return {};
+  }
+}
+
 /** Stages that have produced their artifact. */
-export function completedStages(job: Job): Stage[] {
-  if (job.stage === "done") return [...STAGES];
-  const i = STAGES.indexOf(job.stage as Stage);
-  return i < 0 ? [] : [...STAGES.slice(0, i)];
+export function completedStages(job: Job): string[] {
+  const stages = stagesFor(job.kind);
+  if (job.stage === "done") return [...stages];
+  const i = stages.indexOf(job.stage);
+  return i < 0 ? [] : [...stages.slice(0, i)];
 }

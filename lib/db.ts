@@ -12,17 +12,25 @@
  */
 import { Pool } from "pg";
 
-import {
-  STAGES,
-  STATUS,
-  type Job,
-  type Stage,
-} from "./types";
+import { STATUS, type Job } from "./types";
 
-export { STAGES, STATUS, type Job } from "./types";
+export { STAGES, STATUS, completedStages, type Job } from "./types";
 
 const connectionString =
   process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? "";
+
+/**
+ * The jobs table, schema-qualified when SEESAW_DB_SCHEMA is set — the same
+ * variable the Python side reads, so both can be pointed at an isolated copy
+ * of the store (seesaw's tests, a local trial run) without touching the live
+ * table. Qualified per statement rather than via search_path, which a pooled
+ * endpoint doesn't reliably keep (see shared/db/jobs.py).
+ */
+const SCHEMA = process.env.SEESAW_DB_SCHEMA ?? "";
+if (SCHEMA && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(SCHEMA)) {
+  throw new Error(`SEESAW_DB_SCHEMA=${SCHEMA} is not a plain identifier`);
+}
+const JOBS = SCHEMA ? `"${SCHEMA}".jobs` : "jobs";
 
 let pool: Pool | null = null;
 
@@ -48,8 +56,13 @@ function now(): number {
   return Date.now() / 1000;
 }
 
+/** Runs `sql` with "jobs" pointed at the configured table. */
+async function run(sql: string, params: unknown[] = []) {
+  return db().query(sql.replace(/\bjobs\b/g, JOBS), params);
+}
+
 async function query<T = Job>(sql: string, params: unknown[] = []): Promise<T[]> {
-  const result = await db().query(sql, params);
+  const result = await run(sql, params);
   return result.rows as T[];
 }
 
@@ -62,18 +75,33 @@ export async function getJob(id: string): Promise<Job | null> {
   return rows[0] ?? null;
 }
 
+/**
+ * Insert a queued job at its first stage. Pathway inputs must already have
+ * been checked with validatePathway; this only stores them.
+ *
+ * The kind and params columns are added by the Python side, which owns the
+ * table's schema; on a store no current worker has opened yet, this insert
+ * fails and the API says to start one.
+ */
 export async function createJob(
   question: string,
   model: string,
   autoApprove: boolean,
+  pathway?: { name: string; params: Record<string, unknown> },
 ): Promise<Job> {
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const ts = now();
+  const kind = pathway ? "pathway" : "research";
+  const stage = pathway ? "pathway" : "scout";
+  const params = pathway
+    ? JSON.stringify({ pathway: pathway.name, ...pathway.params })
+    : null;
   await query(
     `INSERT INTO jobs (id, question, model, status, stage, auto_approve,
-                       created_at, updated_at)
-     VALUES ($1, $2, $3, $4, 'scout', $5, $6, $7)`,
-    [id, question.trim(), model, STATUS.QUEUED, autoApprove ? 1 : 0, ts, ts],
+                       created_at, updated_at, kind, params)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [id, question.trim(), model, STATUS.QUEUED, stage, autoApprove ? 1 : 0,
+     ts, ts, kind, params],
   );
   return (await getJob(id))!;
 }
@@ -83,7 +111,7 @@ export async function createJob(
  * click on a stale page can't re-queue something a worker already holds.
  */
 export async function approveJob(id: string): Promise<boolean> {
-  const result = await db().query(
+  const result = await run(
     "UPDATE jobs SET status = $1, error = NULL, updated_at = $2 WHERE id = $3 AND status = $4",
     [STATUS.QUEUED, now(), id, STATUS.AWAITING],
   );
@@ -92,7 +120,7 @@ export async function approveJob(id: string): Promise<boolean> {
 
 /** Retry a failed stage — same stage, back to queued for a worker to claim. */
 export async function retryJob(id: string): Promise<boolean> {
-  const result = await db().query(
+  const result = await run(
     "UPDATE jobs SET status = $1, error = NULL, updated_at = $2 WHERE id = $3 AND status = $4",
     [STATUS.QUEUED, now(), id, STATUS.FAILED],
   );
@@ -112,11 +140,4 @@ export async function cancelJob(id: string): Promise<void> {
 
 export async function deleteJob(id: string): Promise<void> {
   await query("DELETE FROM jobs WHERE id = $1", [id]);
-}
-
-/** Stages that have produced their artifact. */
-export function completedStages(job: Job): Stage[] {
-  if (job.stage === "done") return [...STAGES];
-  const i = STAGES.indexOf(job.stage as Stage);
-  return i < 0 ? [] : [...STAGES.slice(0, i)];
 }
