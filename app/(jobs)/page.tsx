@@ -6,17 +6,7 @@ import useSWR, { useSWRConfig } from "swr";
 
 import { RunnerNotice } from "@/components/shell";
 import { PATHWAYS, type Pathway } from "@/lib/pathways";
-
-const MODELS = [
-  "gpt2",
-  "gpt2-medium",
-  "gpt2-large",
-  "gpt2-xl",
-  "pythia-70m",
-  "pythia-160m",
-  "pythia-410m",
-  "gpt-neo-125m",
-];
+import { MODELS } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 

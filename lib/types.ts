@@ -8,6 +8,18 @@
 
 export const STAGES = ["scout", "lens", "quill"] as const;
 
+/** Models a job can target, offered by the composer and by rerun. */
+export const MODELS = [
+  "gpt2",
+  "gpt2-medium",
+  "gpt2-large",
+  "gpt2-xl",
+  "pythia-70m",
+  "pythia-160m",
+  "pythia-410m",
+  "gpt-neo-125m",
+];
+
 export type Stage = (typeof STAGES)[number];
 
 /**
@@ -56,6 +68,27 @@ export type Job = {
   params?: string | null;
 };
 
+/**
+ * One thing a job's worker did: a stage, a LangGraph node, an LLM or tool
+ * call, a Lens experiment, a pathway step, a check, an error, a change of
+ * status. Written by seesaw's shared/db/events.py as it happens; `parent_id`
+ * is the span it happened inside. `data` is left out of the list and fetched
+ * per event.
+ */
+export type JobEvent = {
+  id: number;
+  parent_id: number | null;
+  ts: number;
+  stage: string | null;
+  kind: string;
+  name: string;
+  /** "running" (or a span whose worker died), "ok" or "error". */
+  status: string;
+  duration_ms: number | null;
+  summary: string | null;
+  data?: Record<string, unknown> | null;
+};
+
 export function jobParams(job: Job): Record<string, unknown> {
   if (!job.params) return {};
   try {
@@ -63,6 +96,16 @@ export function jobParams(job: Job): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/**
+ * A research job's approved pathway inputs, which a rerun runs again: present
+ * once Scout's inputs passed their check (`pathway_params`), and on reruns.
+ */
+export function rerunnable(job: Job): boolean {
+  const params = jobParams(job);
+  return (job.kind ?? "research") === "research" && !!params.pathway &&
+    !!params.pathway_params && !!job.plan_path;
 }
 
 /** Stages that have produced their artifact. */
