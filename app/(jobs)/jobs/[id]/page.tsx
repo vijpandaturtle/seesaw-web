@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { use, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 
 import { StageBar, StatusBadge, relativeTime } from "@/components/status";
+import { Timeline } from "@/components/timeline";
 import { pathwayByName } from "@/lib/pathways";
-import { STATUS, jobParams, type Job } from "@/lib/types";
+import { MODELS, STATUS, jobParams, rerunnable, type Job } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const textFetcher = (url: string) =>
@@ -19,19 +22,29 @@ const GATE_PROMPT: Record<string, string> = {
   quill: "Send these experiment results to Quill for critique?",
 };
 
-type Tab = "plan" | "results" | "critique" | "result" | "inputs" | "report" | "log";
+type Tab =
+  | "plan"
+  | "results"
+  | "critique"
+  | "result"
+  | "inputs"
+  | "report"
+  | "timeline"
+  | "log";
 
 const TABS: Record<string, [Tab, string][]> = {
   research: [
     ["plan", "Research plan"],
     ["results", "Experiment results"],
     ["critique", "Critique"],
+    ["timeline", "Timeline"],
     ["log", "Worker log"],
   ],
   pathway: [
     ["result", "Result"],
     ["inputs", "Inputs"],
     ["report", "Report"],
+    ["timeline", "Timeline"],
     ["log", "Worker log"],
   ],
 };
@@ -100,6 +113,7 @@ export default function JobDetail({
   // before Scout chose the inputs) ran it directly.
   const pathwayName = jobParams(job).pathway;
   const pathway = pathwayName ? pathwayByName(pathwayName) : undefined;
+  const rerunOf = jobParams(job).rerun_of as string | undefined;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -111,6 +125,14 @@ export default function JobDetail({
             <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
               /{pathway?.command ?? "pathway"}
             </span>
+          )}
+          {rerunOf && (
+            <Link
+              href={`/jobs/${rerunOf}`}
+              className="rounded border border-zinc-700 px-1.5 py-0.5 text-xs text-zinc-400 hover:text-zinc-200"
+            >
+              rerun of <span className="font-mono">{rerunOf}</span>
+            </Link>
           )}
         </div>
         <h1 className="mt-2 text-xl font-semibold">{job.question}</h1>
@@ -178,12 +200,14 @@ export default function JobDetail({
         </button>
       )}
 
-      <nav className="mb-4 flex gap-1 border-b border-zinc-800">
+      {rerunnable(job) && !active && <RerunControl job={job} />}
+
+      <nav className="mb-4 flex gap-1 overflow-x-auto border-b border-zinc-800">
         {tabs.map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm ${
+            className={`-mb-px shrink-0 border-b-2 px-3 py-2 text-sm ${
               tab === key
                 ? "border-zinc-200 text-zinc-100"
                 : "border-transparent text-zinc-500 hover:text-zinc-300"
@@ -215,12 +239,71 @@ export default function JobDetail({
           empty="No report yet — the pathway hasn't finished."
         />
       )}
+      {tab === "timeline" && <Timeline jobId={job.id} active={active} />}
       {tab === "log" && (
         <pre className="max-h-[32rem] overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-400">
           {job.log_tail || "(no output mirrored yet)"}
         </pre>
       )}
     </main>
+  );
+}
+
+/**
+ * Run this job's pathway again on the inputs approved for it, from Lens:
+ * the reproducible part of a job, or the same experiment on another model.
+ */
+function RerunControl({ job }: { job: Job }) {
+  const router = useRouter();
+  const { mutate } = useSWRConfig();
+  const name = jobParams(job).pathway as string;
+  const models = pathwayByName(name)?.models ?? MODELS;
+  const [model, setModel] = useState(models.includes(job.model) ? job.model : models[0]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function rerun() {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/jobs/${job.id}/rerun`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setError(body.error ?? `Rerun failed (HTTP ${res.status}).`);
+      return;
+    }
+    mutate("/api/jobs");
+    router.push(`/jobs/${body.job.id}`);
+  }
+
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-2 text-sm">
+      <span className="text-zinc-400">
+        Rerun <span className="font-mono text-zinc-300">{name}</span> on the same inputs, on
+      </span>
+      <select
+        aria-label="Model for the rerun"
+        value={model}
+        onChange={(e) => setModel(e.target.value)}
+        className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-xs text-zinc-300"
+      >
+        {models.map((m) => (
+          <option key={m}>{m}</option>
+        ))}
+      </select>
+      <button
+        onClick={rerun}
+        disabled={busy}
+        className="rounded-md border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-800 disabled:opacity-50"
+      >
+        {busy ? "Starting…" : "Rerun"}
+      </button>
+      {error && <span className="w-full text-xs text-amber-300">{error}</span>}
+    </div>
   );
 }
 
@@ -236,7 +319,7 @@ function MarkdownArtifact({
   if (data === undefined)
     return <p className="text-sm text-zinc-500">Loading…</p>;
   return (
-    <article className="prose-invert max-w-none space-y-3 text-sm leading-relaxed text-zinc-300 [&_a]:text-sky-400 [&_code]:text-zinc-200 [&_h1]:mt-6 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mt-5 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-4 [&_h3]:font-medium [&_li]:ml-5 [&_li]:list-disc [&_strong]:text-zinc-100">
+    <article className="prose-invert max-w-none space-y-3 text-sm [overflow-wrap:anywhere] [&_pre]:overflow-x-auto [&_pre]:[overflow-wrap:normal] leading-relaxed text-zinc-300 [&_a]:text-sky-400 [&_code]:text-zinc-200 [&_h1]:mt-6 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:mt-5 [&_h2]:text-base [&_h2]:font-semibold [&_h3]:mt-4 [&_h3]:font-medium [&_li]:ml-5 [&_li]:list-disc [&_strong]:text-zinc-100">
       <ReactMarkdown>{data}</ReactMarkdown>
     </article>
   );

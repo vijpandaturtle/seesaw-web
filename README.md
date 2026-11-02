@@ -54,7 +54,25 @@ The home page is a composer, with past jobs in a sidebar beside it:
 `lib/pathways.ts` mirrors `seesaw/pathways/catalog.py` (names, inputs). Change
 both together. Jobs need the `kind` and `params` columns, which the seesaw side
 adds the first time a current worker opens the store. Older pathway jobs, which
-took hand-entered inputs and ran as one stage, still render on their job pages.
+took hand-entered inputs and ran as one stage, still render on their job pages;
+nothing creates them any more.
+
+Once Scout's inputs for a pathway are approved, the job page offers **Rerun**:
+a new job, queued at Lens with the same plan and inputs, optionally on another
+model (`POST /api/jobs/<id>/rerun` with `{ model }`). Scout doesn't run again,
+so the pathway's verdict reproduces; the worker checks the inputs against the
+new model's tokenizer before running anything.
+
+## Following a job
+
+Each job page has a **Timeline** tab: what the worker did, as a tree, read
+from seesaw's `job_events` table and refreshed every two seconds while the job
+runs. Each stage holds the agent's nodes, and each node its LLM calls (model,
+tokens, prompt, answer) and tool calls (input, output); Lens's experiments and
+a pathway's steps show their numbers and plots. Click a row for its data:
+`/api/jobs/<id>/events` lists a job's events without it, and
+`/api/jobs/<id>/events/<eventId>` returns one with it. **Worker log** is still
+there for raw output.
 
 ## Environment
 
