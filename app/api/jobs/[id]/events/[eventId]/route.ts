@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 type Ctx = { params: Promise<{ id: string; eventId: string }> };
 
-/** One timeline event with its data: the prompt, the answer, the tool's output. */
+/** One agent-trace event with its data: the prompt, the answer, the tool's output. */
 export async function GET(_request: Request, { params }: Ctx) {
   const { id, eventId } = await params;
   const n = Number(eventId);

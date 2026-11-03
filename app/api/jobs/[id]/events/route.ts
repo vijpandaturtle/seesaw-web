@@ -7,8 +7,8 @@ export const runtime = "nodejs";
 type Ctx = { params: Promise<{ id: string }> };
 
 /**
- * The job's timeline, oldest first, without each event's data. `events` is
- * null when the store has no timeline table yet (no current worker has
+ * The job's agent trace, oldest first, without each event's data. `events` is
+ * null when the store has no trace table yet (no current worker has
  * opened it).
  */
 export async function GET(_request: Request, { params }: Ctx) {

@@ -61,7 +61,6 @@ export type Job = {
   updated_at: number;
   cancel_requested: number;
   worker_id: string | null;
-  log_tail: string | null;
   /** Absent on rows written before pathway jobs existed. */
   kind?: string;
   /** JSON: a pathway job's inputs, including `pathway`. */

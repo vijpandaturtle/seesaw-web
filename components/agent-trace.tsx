@@ -28,7 +28,7 @@ const KIND: Record<string, { label: string; cls: string }> = {
  * nodes, LLM calls, tool calls, experiments and pathway steps, each with how
  * long it took and how it ended. Click a row for its data.
  */
-export function Timeline({ jobId, active }: { jobId: string; active: boolean }) {
+export function AgentTrace({ jobId, active }: { jobId: string; active: boolean }) {
   const { data } = useSWR<{ events: JobEvent[] | null } | null>(
     `/api/jobs/${jobId}/events`,
     jsonFetcher,
@@ -36,11 +36,11 @@ export function Timeline({ jobId, active }: { jobId: string; active: boolean }) 
   );
 
   if (data === undefined) return <p className="text-sm text-zinc-500">Loading…</p>;
-  if (data === null) return <p className="text-sm text-rose-300">Couldn&apos;t load the timeline.</p>;
+  if (data === null) return <p className="text-sm text-rose-300">Couldn&apos;t load the agent trace.</p>;
   if (data.events === null)
     return (
       <p className="text-sm text-zinc-500">
-        This job store has no timeline yet. It&apos;s added the first time a current seesaw worker
+        This job store has no agent trace yet. It&apos;s added the first time a current seesaw worker
         opens the store.
       </p>
     );
@@ -50,7 +50,7 @@ export function Timeline({ jobId, active }: { jobId: string; active: boolean }) 
       <p className="text-sm text-zinc-500">
         {active
           ? "Nothing recorded yet — the worker hasn't started."
-          : "No timeline for this job. Jobs run before the timeline existed only have the worker log."}
+          : "No agent trace for this job: it ran before traces were recorded."}
       </p>
     );
 

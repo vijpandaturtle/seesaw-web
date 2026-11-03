@@ -180,11 +180,11 @@ export async function deleteJob(id: string): Promise<void> {
 }
 
 /**
- * A job's timeline, oldest first, without each event's `data` (the dashboard
+ * A job's agent trace, oldest first, without each event's `data` (the dashboard
  * polls this while the job runs; getEvent fetches one event's data).
  *
  * The table is created by the Python side the first time a current worker
- * opens the store; before that there is no timeline, so this returns null.
+ * opens the store; before that there is no trace, so this returns null.
  */
 export async function listEvents(jobId: string): Promise<JobEvent[] | null> {
   const rows = await missingTableIsEmpty(
