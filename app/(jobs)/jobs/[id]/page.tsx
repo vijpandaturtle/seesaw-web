@@ -115,7 +115,7 @@ export default function JobDetail({
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <header className="mb-6">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <code className="text-xs text-zinc-500">{job.id}</code>
           <StatusBadge status={job.status} />
           {(isPathway || pathway) && (
@@ -131,6 +131,7 @@ export default function JobDetail({
               rerun of <span className="font-mono">{rerunOf}</span>
             </Link>
           )}
+          {!active && <DeleteControl jobId={job.id} />}
         </div>
         <h1 className="mt-2 text-xl font-semibold">{job.question}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -238,6 +239,64 @@ export default function JobDetail({
       )}
       {tab === "trace" && <AgentTrace jobId={job.id} active={active} />}
     </main>
+  );
+}
+
+/**
+ * Delete this job and its agent trace, after a second click to confirm.
+ * Not offered while the job is queued or running: cancel it first.
+ */
+function DeleteControl({ jobId }: { jobId: string }) {
+  const router = useRouter();
+  const { mutate } = useSWRConfig();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/jobs/${jobId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? `Delete failed (HTTP ${res.status}).`);
+      setBusy(false);
+      return;
+    }
+    await mutate("/api/jobs");
+    router.push("/");
+  }
+
+  return (
+    <span className="ml-auto flex items-center gap-2">
+      {error && <span className="text-xs text-rose-300">{error}</span>}
+      {confirming ? (
+        <>
+          <span className="text-xs text-zinc-400">Delete this job?</span>
+          <button
+            onClick={remove}
+            disabled={busy}
+            className="rounded border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 text-xs text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
+          >
+            {busy ? "Deleting…" : "Delete"}
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            disabled={busy}
+            className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400 hover:text-zinc-200"
+          >
+            Keep
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={() => setConfirming(true)}
+          className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-500 hover:border-rose-500/40 hover:text-rose-300"
+        >
+          Delete
+        </button>
+      )}
+    </span>
   );
 }
 
