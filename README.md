@@ -65,14 +65,13 @@ new model's tokenizer before running anything.
 
 ## Following a job
 
-Each job page has a **Timeline** tab: what the worker did, as a tree, read
+Each job page has an **Agent trace** tab: what the worker did, as a tree, read
 from seesaw's `job_events` table and refreshed every two seconds while the job
 runs. Each stage holds the agent's nodes, and each node its LLM calls (model,
 tokens, prompt, answer) and tool calls (input, output); Lens's experiments and
 a pathway's steps show their numbers and plots. Click a row for its data:
 `/api/jobs/<id>/events` lists a job's events without it, and
-`/api/jobs/<id>/events/<eventId>` returns one with it. **Worker log** is still
-there for raw output.
+`/api/jobs/<id>/events/<eventId>` returns one with it.
 
 ## Environment
 

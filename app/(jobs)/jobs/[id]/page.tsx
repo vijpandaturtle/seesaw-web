@@ -7,7 +7,7 @@ import ReactMarkdown from "react-markdown";
 import useSWR, { useSWRConfig } from "swr";
 
 import { StageBar, StatusBadge, relativeTime } from "@/components/status";
-import { Timeline } from "@/components/timeline";
+import { AgentTrace } from "@/components/agent-trace";
 import { pathwayByName } from "@/lib/pathways";
 import { MODELS, STATUS, jobParams, rerunnable, type Job } from "@/lib/types";
 
@@ -29,23 +29,20 @@ type Tab =
   | "result"
   | "inputs"
   | "report"
-  | "timeline"
-  | "log";
+  | "trace";
 
 const TABS: Record<string, [Tab, string][]> = {
   research: [
     ["plan", "Research plan"],
     ["results", "Experiment results"],
     ["critique", "Critique"],
-    ["timeline", "Timeline"],
-    ["log", "Worker log"],
+    ["trace", "Agent trace"],
   ],
   pathway: [
     ["result", "Result"],
     ["inputs", "Inputs"],
     ["report", "Report"],
-    ["timeline", "Timeline"],
-    ["log", "Worker log"],
+    ["trace", "Agent trace"],
   ],
 };
 
@@ -239,12 +236,7 @@ export default function JobDetail({
           empty="No report yet — the pathway hasn't finished."
         />
       )}
-      {tab === "timeline" && <Timeline jobId={job.id} active={active} />}
-      {tab === "log" && (
-        <pre className="max-h-[32rem] overflow-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-400">
-          {job.log_tail || "(no output mirrored yet)"}
-        </pre>
-      )}
+      {tab === "trace" && <AgentTrace jobId={job.id} active={active} />}
     </main>
   );
 }
@@ -401,7 +393,7 @@ function PathwayResultView({ job }: { job: Job }) {
     return (
       <p className="text-sm text-zinc-500">
         {job.status === STATUS.FAILED
-          ? "The pathway failed before producing a result — see the error above and the worker log."
+          ? "The pathway failed before producing a result — see the error above and the agent trace."
           : "No result yet — the pathway is still running."}
       </p>
     );
