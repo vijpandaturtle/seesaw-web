@@ -5,7 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
 import { RunnerNotice } from "@/components/shell";
-import { PATHWAYS, type Pathway } from "@/lib/pathways";
+import { AUTO, OFFERED, type Pathway } from "@/lib/pathways";
 import { MODELS } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -14,6 +14,8 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
  * The new-job composer. Plain text is a research question for Scout → Lens →
  * Quill; a leading "/" opens the pathway menu, and picking one attaches it to
  * the question as Scout's starting plan. Scout decides the pathway's inputs.
+ * With none picked, Scout chooses a pathway itself (or none), unless the user
+ * asks for no pathway at all.
  */
 export default function NewJobPage() {
   const router = useRouter();
@@ -22,6 +24,9 @@ export default function NewJobPage() {
 
   const [text, setText] = useState("");
   const [pathway, setPathway] = useState<Pathway | null>(null);
+  // Without a picked pathway: let Scout choose one (AUTO), or run none.
+  const [scoutChooses, setScoutChooses] = useState(true);
+  const [search, setSearch] = useState(false);
   const [model, setModel] = useState("gpt2");
   const [autoApprove, setAutoApprove] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -35,7 +40,7 @@ export default function NewJobPage() {
     () =>
       slash === null
         ? []
-        : PATHWAYS.filter(
+        : OFFERED.filter(
             (p) => p.command.startsWith(slash) || p.name.startsWith(slash),
           ),
     [slash],
@@ -62,7 +67,13 @@ export default function NewJobPage() {
     if (!canStart || busy) return;
     setBusy(true);
     setError(null);
-    const body = { question: text, model, autoApprove, pathway: pathway?.name };
+    const body = {
+      question: text,
+      model,
+      autoApprove,
+      pathway: pathway?.name ?? (scoutChooses ? AUTO : undefined),
+      search,
+    };
     const res = await fetch("/api/jobs", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -118,6 +129,7 @@ export default function NewJobPage() {
         Ask a question and Scout, Lens and Quill research it. Type{" "}
         <kbd className="rounded border border-zinc-700 px-1 font-mono text-xs text-zinc-300">/</kbd>{" "}
         to give Scout a pathway to start from; it picks the prompts and inputs itself.
+        Otherwise Scout chooses a pathway that fits, or none.
       </p>
 
       <div className="relative rounded-xl border border-zinc-800 bg-zinc-900/50 focus-within:border-zinc-600">
@@ -134,6 +146,17 @@ export default function NewJobPage() {
               </button>
             </span>
             <span className="text-xs text-zinc-500">{pathway.summary}</span>
+            {text === "" && (
+              <button
+                onClick={() => {
+                  setText(pathway.example);
+                  inputRef.current?.focus();
+                }}
+                className="basis-full text-left text-xs text-zinc-400 hover:text-zinc-200"
+              >
+                Try: <span className="italic">{pathway.example}</span>
+              </button>
+            )}
           </div>
         )}
         <label htmlFor="question" className="sr-only">
@@ -151,7 +174,7 @@ export default function NewJobPage() {
           onKeyDown={onQuestionKey}
           placeholder={
             pathway
-              ? `What should Scout investigate with ${pathway.label.toLowerCase()}?`
+              ? pathway.example
               : "What attention heads mediate indirect object identification in GPT-2 Small?"
           }
           rows={3}
@@ -204,6 +227,30 @@ export default function NewJobPage() {
               <option key={m}>{m}</option>
             ))}
           </select>
+          {!pathway && (
+            <>
+              <label className="sr-only" htmlFor="pathway-mode">
+                Pathway
+              </label>
+              <select
+                id="pathway-mode"
+                value={scoutChooses ? "auto" : "none"}
+                onChange={(e) => setScoutChooses(e.target.value === "auto")}
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-xs text-zinc-300"
+              >
+                <option value="auto">Scout chooses a pathway, or none</option>
+                <option value="none">No pathway</option>
+              </select>
+            </>
+          )}
+          <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <input
+              type="checkbox"
+              checked={search}
+              onChange={(e) => setSearch(e.target.checked)}
+            />
+            Search the literature
+          </label>
           <label className="flex items-center gap-1.5 text-xs text-zinc-500">
             <input
               type="checkbox"
@@ -237,7 +284,7 @@ export default function NewJobPage() {
             Pathways
           </h2>
           <div className="grid gap-2 sm:grid-cols-3">
-            {PATHWAYS.map((p) => (
+            {OFFERED.map((p) => (
               <button
                 key={p.name}
                 onClick={() => choose(p)}
@@ -245,6 +292,9 @@ export default function NewJobPage() {
               >
                 <div className="font-mono text-xs text-zinc-200">/{p.command}</div>
                 <div className="mt-1 text-xs leading-relaxed text-zinc-500">{p.summary}</div>
+                <div className="mt-2 text-xs leading-relaxed text-zinc-400 italic">
+                  e.g. {p.example}
+                </div>
               </button>
             ))}
           </div>
