@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 
 import { relativeTime } from "@/components/status";
+import { jobModels, shortName } from "@/lib/models";
 import { pathwayByName } from "@/lib/pathways";
 import { STATUS, jobParams, type Job } from "@/lib/types";
 
@@ -135,7 +136,7 @@ function JobList({
                           </span>
                           <span className="block truncate text-[11px] text-zinc-600">
                             <span className="font-mono">{kindLabel(job)}</span> ·{" "}
-                            {job.model} · {relativeTime(job.created_at)}
+                            {jobModels(job).map(shortName).join(", ")} · {relativeTime(job.created_at)}
                           </span>
                         </span>
                         <span className="sr-only">{job.status}</span>

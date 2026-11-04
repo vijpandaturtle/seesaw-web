@@ -32,8 +32,10 @@ export type Pathway = {
   fields: Field[];
   /** Bumped when a change would change the verdict on the same inputs. */
   version: string;
-  /** feature_explain uses GPT-2 small SAEs, so it can't target other models. */
+  /** The only models this pathway can run on (feature_explain: models with published SAEs). */
   models?: string[];
+  /** Takes a second model to compare with the job's first (model_diffing's other_model). */
+  comparesModels?: boolean;
   /** An older name kept so earlier jobs render and rerun; not offered in the composer. */
   hidden?: boolean;
 };
@@ -41,8 +43,8 @@ export type Pathway = {
 /** A job's pathway param that asks Scout to choose the pathway, or none. */
 export const AUTO = "auto";
 
-/** The models feature_explain's SAEs were trained on. */
-export const SAE_MODELS = ["gpt2", "gpt2-small"];
+/** The models with published SAEs, which feature_explain needs (catalog.py FEATURE_SAES). */
+export const SAE_MODELS = ["google/gemma-2-2b", "Qwen/Qwen2.5-7B-Instruct"];
 
 // One entry per input name, as catalog.py's INPUTS describes it. Pathways
 // share names, so whether an input is required is set per pathway below.
@@ -250,16 +252,17 @@ export const PATHWAYS: Pathway[] = [
     label: "Model diffing",
     summary:
       "What did a fine-tune (or quantisation, or edit) change, and in which weights? Compares the job's model with other_model.",
-    example: "What changed between gpt2 and distilgpt2, and in which layers?",
+    example: "What did instruction tuning change between Qwen2.5-1.5B and Qwen2.5-1.5B-Instruct, and in which layers?",
     fields: fields(["prompts"], [], ["other_model"]),
     version: "1",
+    comparesModels: true,
   },
   {
     name: "feature_explain",
     command: "feature-explain",
     label: "Feature explain",
     summary:
-      "Which SAE features drive this output, and what are they? Sweeps GPT-2 small SAEs at layers 4, 6, 8 and 10 (gpt2 only).",
+      "Which SAE features drive this output, and what are they? Sweeps published residual SAEs at several depths (gemma-2-2b, or Qwen2.5-7B-Instruct; no published SAEs for other models).",
     example: "Which SAE features drive the model to complete a famous quote?",
     fields: fields(ANSWERS),
     version: "2",

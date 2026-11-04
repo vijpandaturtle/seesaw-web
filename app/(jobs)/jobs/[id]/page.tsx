@@ -9,7 +9,9 @@ import useSWR, { useSWRConfig } from "swr";
 import { StageBar, StatusBadge, relativeTime } from "@/components/status";
 import { AgentTrace } from "@/components/agent-trace";
 import { AUTO, pathwayByName } from "@/lib/pathways";
-import { MODELS, STATUS, jobCost, jobParams, rerunnable, usd, type Job } from "@/lib/types";
+import { ModelPicker } from "@/components/model-picker";
+import { incompatibility, jobModels } from "@/lib/models";
+import { STATUS, jobCost, jobParams, rerunnable, usd, type Job } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const textFetcher = (url: string) =>
@@ -154,7 +156,10 @@ export default function JobDetail({
         <h1 className="mt-2 text-xl font-semibold">{job.question}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <StageBar job={job} />
-          <span className="font-mono text-xs text-zinc-500">{job.model}</span>
+          <span className="font-mono text-xs text-zinc-500">
+            {jobModels(job).join(", ")}
+            {typeof p.other_model === "string" && ` vs ${p.other_model}`}
+          </span>
           {job.auto_approve ? (
             <span className="text-xs text-zinc-500">auto-approve on</span>
           ) : null}
@@ -186,6 +191,7 @@ export default function JobDetail({
           <p className="text-sm text-amber-100">
             {GATE_PROMPT[job.stage] ?? `Approve and run ${job.stage}?`}
           </p>
+          {job.stage === "lens" && <GateModels job={job} onSaved={() => mutate()} />}
           <GateCost job={job} />
           <div className="mt-3 flex gap-2">
             <button
@@ -386,8 +392,9 @@ function RerunControl({ job }: { job: Job }) {
   const router = useRouter();
   const { mutate } = useSWRConfig();
   const name = jobParams(job).pathway as string;
-  const models = pathwayByName(name)?.models ?? MODELS;
-  const [model, setModel] = useState(models.includes(job.model) ? job.model : models[0]);
+  const pathway = pathwayByName(name);
+  const [models, setModels] = useState<string[]>(() => jobModels(job));
+  const blocked = models.map((m) => incompatibility(pathway, m)).find(Boolean) ?? null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -397,7 +404,7 @@ function RerunControl({ job }: { job: Job }) {
     const res = await fetch(`/api/jobs/${job.id}/rerun`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model }),
+      body: JSON.stringify({ models }),
     });
     const body = await res.json().catch(() => ({}));
     setBusy(false);
@@ -414,24 +421,74 @@ function RerunControl({ job }: { job: Job }) {
       <span className="text-zinc-400">
         Rerun <span className="font-mono text-zinc-300">{name}</span> on the same inputs, on
       </span>
-      <select
-        aria-label="Model for the rerun"
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-        className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-xs text-zinc-300"
-      >
-        {models.map((m) => (
-          <option key={m}>{m}</option>
-        ))}
-      </select>
+      <div className="min-w-64 flex-1">
+        <ModelPicker
+          value={models}
+          onChange={setModels}
+          pathway={pathway}
+          max={pathway?.comparesModels ? 1 : undefined}
+          label="Models for the rerun"
+        />
+      </div>
       <button
         onClick={rerun}
-        disabled={busy}
+        disabled={busy || !models.length || Boolean(blocked)}
         className="rounded-md border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-800 disabled:opacity-50"
       >
         {busy ? "Starting…" : "Rerun"}
       </button>
-      {error && <span className="w-full text-xs text-amber-300">{error}</span>}
+      {(error || blocked) && (
+        <span className="w-full text-xs text-amber-300">{error ?? `${blocked}.`}</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The models Lens will run on, editable while the job waits at the Lens gate:
+ * drop one before approving (or add one). Saved at once; the worker reads
+ * them when the stage starts.
+ */
+function GateModels({ job, onSaved }: { job: Job; onSaved: () => void }) {
+  const saved = jobModels(job);
+  const pathway = pathwayByName(jobParams(job).pathway);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function save(models: string[]) {
+    if (!models.length) {
+      setError("Keep at least one model; stop the job instead to run none.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/jobs/${job.id}/models`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ models }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) {
+      setError(body.error ?? `Couldn't change the models (HTTP ${res.status}).`);
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <div className={`mt-3 text-sm ${busy ? "opacity-60" : ""}`}>
+      <p className="mb-1 text-xs text-amber-200/70">
+        Lens runs the plan on {saved.length === 1 ? "this model" : `these ${saved.length} models`}:
+      </p>
+      <ModelPicker
+        value={saved}
+        onChange={save}
+        pathway={pathway}
+        max={pathway?.comparesModels ? 1 : undefined}
+        label="Models Lens runs on"
+      />
+      {error && <p className="mt-1 text-xs text-amber-300">{error}</p>}
     </div>
   );
 }

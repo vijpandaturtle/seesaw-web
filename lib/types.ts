@@ -8,17 +8,6 @@
 
 export const STAGES = ["scout", "lens", "quill"] as const;
 
-/** Models a job can target, offered by the composer and by rerun. */
-export const MODELS = [
-  "gpt2",
-  "gpt2-medium",
-  "gpt2-large",
-  "gpt2-xl",
-  "pythia-70m",
-  "pythia-160m",
-  "pythia-410m",
-  "gpt-neo-125m",
-];
 
 export type Stage = (typeof STAGES)[number];
 

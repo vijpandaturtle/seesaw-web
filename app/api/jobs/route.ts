@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createJob, listJobs } from "@/lib/db";
+import { DEFAULT_MODEL, cleanModels, incompatibility } from "@/lib/models";
 import { AUTO, pathwayByName } from "@/lib/pathways";
 import { runnerMode, startStage } from "@/lib/runner";
 
@@ -14,15 +15,20 @@ export async function GET() {
  * Insert a queued research job, then start a worker on it if we're running
  * alongside the agents. Deployed away from them, the row just waits for a poller.
  *
- * Body: { question, model, autoApprove, pathway?, search? }. A pathway is
- * Scout's starting plan; Scout chooses its inputs, so none are taken here.
- * "auto" has Scout choose the pathway too (or none). `search` gives Scout its
- * literature search tools.
+ * Body: { question, models, otherModel?, autoApprove, pathway?, search? }.
+ * `models` lists every model the job runs on (a single `model` string is
+ * still accepted). A pathway is Scout's starting plan; Scout chooses its
+ * inputs, so none are taken here, except model_diffing's `otherModel`: the
+ * changed model compared with the first. "auto" has Scout choose the pathway
+ * too (or none). `search` gives Scout its literature search tools.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
-  const model =
-    typeof body?.model === "string" && body.model ? body.model : "gpt2";
+  const chosen = cleanModels(body?.models ?? body?.model ?? DEFAULT_MODEL);
+  if ("error" in chosen) {
+    return NextResponse.json({ error: chosen.error }, { status: 400 });
+  }
+  const { models } = chosen;
   const question = typeof body?.question === "string" ? body.question.trim() : "";
   if (!question) {
     return NextResponse.json({ error: "question is required" }, { status: 400 });
@@ -39,13 +45,30 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (found.models && !found.models.includes(model)) {
+    const reason = models.map((m) => incompatibility(found, m)).find(Boolean);
+    if (reason) {
+      return NextResponse.json({ error: reason }, { status: 400 });
+    }
+    pathway = found.name;
+  }
+
+  // model_diffing compares the first model with a changed one the user names.
+  let otherModel: string | undefined;
+  if (pathwayByName(pathway)?.comparesModels) {
+    const other = cleanModels(body?.otherModel);
+    if ("error" in other || other.models.length !== 1) {
       return NextResponse.json(
-        { error: `${found.label} only runs on ${found.models.join(", ")}` },
+        { error: "model diffing needs the changed model to compare with: otherModel" },
         { status: 400 },
       );
     }
-    pathway = found.name;
+    if (models.length !== 1) {
+      return NextResponse.json(
+        { error: "model diffing compares one base model with the changed one" },
+        { status: 400 },
+      );
+    }
+    otherModel = other.models[0];
   }
 
   if (body?.search !== undefined && typeof body.search !== "boolean") {
@@ -55,7 +78,7 @@ export async function POST(request: Request) {
 
   let job;
   try {
-    job = await createJob(question, model, Boolean(body?.autoApprove), pathway, search);
+    job = await createJob(question, models, Boolean(body?.autoApprove), pathway, search, otherModel);
   } catch (error) {
     // The only expected failure: a store whose schema predates the params column.
     if (/column .*(kind|params)/.test(String(error))) {
