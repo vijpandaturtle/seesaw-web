@@ -12,6 +12,7 @@
  */
 import { Pool } from "pg";
 
+import { incompatibility, jobModels } from "./models";
 import { pathwayByName } from "./pathways";
 import { STATUS, jobParams, rerunnable, type Job, type JobEvent } from "./types";
 
@@ -88,20 +89,27 @@ export async function getJob(id: string): Promise<Job | null> {
  */
 export async function createJob(
   question: string,
-  model: string,
+  models: string[],
   autoApprove: boolean,
   pathway?: string,
   search = false,
+  otherModel?: string,
 ): Promise<Job> {
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const ts = now();
-  const fields = { ...(pathway && { pathway }), ...(search && { search: true }) };
-  const params = Object.keys(fields).length ? JSON.stringify(fields) : null;
+  // `model` keeps the first, for readers that know only one; params.models has them all.
+  const fields = {
+    ...(pathway && { pathway }),
+    ...(search && { search: true }),
+    models,
+    ...(otherModel && { other_model: otherModel }),
+  };
+  const params = JSON.stringify(fields);
   await query(
     `INSERT INTO jobs (id, question, model, status, stage, auto_approve,
                        created_at, updated_at, kind, params)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [id, question.trim(), model, STATUS.QUEUED, "scout", autoApprove ? 1 : 0,
+    [id, question.trim(), models[0], STATUS.QUEUED, "scout", autoApprove ? 1 : 0,
      ts, ts, "research", params],
   );
   return (await getJob(id))!;
@@ -117,7 +125,7 @@ export async function createJob(
  */
 export async function rerunJob(
   id: string,
-  model: string | undefined,
+  models: string[] | undefined,
   autoApprove: boolean,
 ): Promise<{ job: Job } | { error: string }> {
   const source = await getJob(id);
@@ -127,10 +135,12 @@ export async function rerunJob(
   if (!rerunnable(source) || !name) {
     return { error: "this job has no approved pathway inputs to rerun" };
   }
-  const target = model || source.model;
-  const allowed = pathwayByName(name)?.models;
-  if (allowed && !allowed.includes(target)) {
-    return { error: `${name} only runs on ${allowed.join(", ")}, not ${target}` };
+  const targets = models?.length ? models : jobModels(source);
+  const pathway = pathwayByName(name);
+  const reason = targets.map((m) => incompatibility(pathway, m)).find(Boolean);
+  if (reason) return { error: reason };
+  if (pathway?.comparesModels && targets.length !== 1) {
+    return { error: "model diffing compares one base model with the changed one" };
   }
 
   const newId = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
@@ -139,11 +149,42 @@ export async function rerunJob(
     `INSERT INTO jobs (id, question, model, status, stage, auto_approve, plan_path,
                        created_at, updated_at, kind, params)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [newId, source.question, target, STATUS.QUEUED, "lens", autoApprove ? 1 : 0,
+    [newId, source.question, targets[0], STATUS.QUEUED, "lens", autoApprove ? 1 : 0,
      source.plan_path, ts, ts, "research",
-     JSON.stringify({ pathway: name, pathway_params: params.pathway_params, rerun_of: source.id })],
+     JSON.stringify({
+       pathway: name, pathway_params: params.pathway_params, rerun_of: source.id, models: targets,
+       ...(params.other_model ? { other_model: params.other_model } : {}),
+     })],
   );
   return { job: (await getJob(newId))! };
+}
+
+/**
+ * Change the models a job parked at its gate will run on (dropping one before
+ * approving, say). Guarded on the job still waiting with the params read here,
+ * so it can't race an approval or another edit.
+ */
+export async function setJobModels(
+  id: string,
+  models: string[],
+): Promise<{ job: Job } | { error: string }> {
+  const job = await getJob(id);
+  if (!job) return { error: "not found" };
+  if (job.status !== STATUS.AWAITING) return { error: "the job is no longer waiting for approval" };
+  const params = jobParams(job);
+  const pathway = pathwayByName(params.pathway);
+  const reason = models.map((m) => incompatibility(pathway, m)).find(Boolean);
+  if (reason) return { error: reason };
+  if (pathway?.comparesModels && models.length !== 1) {
+    return { error: "model diffing compares one base model with the changed one" };
+  }
+  const result = await run(
+    `UPDATE jobs SET model = $1, params = $2, updated_at = $3
+      WHERE id = $4 AND status = $5 AND params IS NOT DISTINCT FROM $6`,
+    [models[0], JSON.stringify({ ...params, models }), now(), id, STATUS.AWAITING, job.params ?? null],
+  );
+  if (!(result.rowCount ?? 0)) return { error: "the job changed meanwhile; reload and try again" };
+  return { job: (await getJob(id))! };
 }
 
 /**

@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
+import { ModelPicker } from "@/components/model-picker";
 import { RunnerNotice } from "@/components/shell";
+import { DEFAULT_MODEL, incompatibility } from "@/lib/models";
 import { AUTO, OFFERED, type Pathway } from "@/lib/pathways";
-import { MODELS } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -27,7 +28,9 @@ export default function NewJobPage() {
   // Without a picked pathway: let Scout choose one (AUTO), or run none.
   const [scoutChooses, setScoutChooses] = useState(true);
   const [search, setSearch] = useState(false);
-  const [model, setModel] = useState("gpt2");
+  // Every model the job runs on; model_diffing compares the first with `otherModel`.
+  const [models, setModels] = useState<string[]>([DEFAULT_MODEL]);
+  const [otherModel, setOtherModel] = useState<string[]>([]);
   const [autoApprove, setAutoApprove] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -46,14 +49,20 @@ export default function NewJobPage() {
     [slash],
   );
 
-  const canStart = text.trim() !== "" && slash === null;
-  const models = pathway?.models ?? MODELS;
+  const compares = Boolean(pathway?.comparesModels);
+  const blocked = models.map((m) => incompatibility(pathway, m)).find(Boolean) ?? null;
+  const canStart =
+    text.trim() !== "" && slash === null && models.length > 0 && !blocked &&
+    (!compares || otherModel.length === 1);
 
   function choose(p: Pathway) {
     setPathway(p);
     setText("");
     setError(null);
-    if (p.models && !p.models.includes(model)) setModel(p.models[0]);
+    // Keep the models this pathway can run; fall back to one it can.
+    const kept = models.filter((m) => !incompatibility(p, m));
+    const next = kept.length ? kept : p.models ? [p.models[0]] : [DEFAULT_MODEL];
+    setModels(p.comparesModels ? next.slice(0, 1) : next);
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
@@ -69,7 +78,8 @@ export default function NewJobPage() {
     setError(null);
     const body = {
       question: text,
-      model,
+      models,
+      ...(compares && { otherModel: otherModel[0] }),
       autoApprove,
       pathway: pathway?.name ?? (scoutChooses ? AUTO : undefined),
       search,
@@ -175,7 +185,7 @@ export default function NewJobPage() {
           placeholder={
             pathway
               ? pathway.example
-              : "What attention heads mediate indirect object identification in GPT-2 Small?"
+              : "What attention heads mediate indirect object identification in Gemma-2-2B?"
           }
           rows={3}
           role="combobox"
@@ -214,19 +224,32 @@ export default function NewJobPage() {
         )}
 
         <div className="flex flex-wrap items-center gap-3 border-t border-zinc-800/80 px-3 py-2.5">
-          <label className="sr-only" htmlFor="model">
-            Model
-          </label>
-          <select
-            id="model"
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 font-mono text-xs text-zinc-300"
-          >
-            {models.map((m) => (
-              <option key={m}>{m}</option>
-            ))}
-          </select>
+          <div className={compares ? "flex w-full flex-wrap items-center gap-2" : "w-full"}>
+            {compares && <span className="text-xs text-zinc-500">Base</span>}
+            <div className={compares ? "min-w-48 flex-1" : ""}>
+              <ModelPicker
+                value={models}
+                onChange={setModels}
+                pathway={pathway}
+                max={compares ? 1 : undefined}
+                label={compares ? "Base model" : "Models"}
+              />
+            </div>
+            {compares && (
+              <>
+                <span className="text-xs text-zinc-500">vs changed</span>
+                <div className="min-w-48 flex-1">
+                  <ModelPicker
+                    value={otherModel}
+                    onChange={setOtherModel}
+                    max={1}
+                    label="Changed model"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          {blocked && <span className="w-full text-xs text-amber-300">{blocked}.</span>}
           {!pathway && (
             <>
               <label className="sr-only" htmlFor="pathway-mode">
