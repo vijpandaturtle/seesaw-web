@@ -10,7 +10,7 @@ import { StageBar, StatusBadge, relativeTime } from "@/components/status";
 import { AgentTrace } from "@/components/agent-trace";
 import { AUTO, pathwayByName } from "@/lib/pathways";
 import { ModelPicker } from "@/components/model-picker";
-import { incompatibility, jobModels } from "@/lib/models";
+import { incompatibility, jobModels, shortName } from "@/lib/models";
 import { STATUS, jobCost, jobParams, rerunnable, usd, type Job } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -62,6 +62,8 @@ type PathwayOutput = {
 type ExperimentResult = {
   name: string;
   tool: string;
+  /** The model it ran on: a job can run on several. */
+  model_name?: string;
   status: string;
   summary?: string;
   error?: string;
@@ -526,6 +528,7 @@ function Results({ job }: { job: Job }) {
   if (!data) return <p className="text-sm text-zinc-500">Loading…</p>;
 
   const results: ExperimentResult[] = data.results ?? [];
+  const severalModels = new Set(results.map((r) => r.model_name).filter(Boolean)).size > 1;
 
   return (
     <div className="space-y-3">
@@ -548,6 +551,11 @@ function Results({ job }: { job: Job }) {
               </span>{" "}
               {r.name}{" "}
               <code className="text-xs text-zinc-500">({r.tool})</code>
+              {severalModels && r.model_name && (
+                <span className="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-400">
+                  {shortName(r.model_name)}
+                </span>
+              )}
             </summary>
             <div className="mt-3 space-y-3">
               {ok ? (
