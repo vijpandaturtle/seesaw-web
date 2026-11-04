@@ -65,7 +65,54 @@ export type Job = {
   kind?: string;
   /** JSON: a pathway job's inputs, including `pathway`. */
   params?: string | null;
+  /** JSON (seesaw's shared/costs.py): spent so far, and the next stage's estimate. Set at each gate. */
+  cost?: string | null;
 };
+
+/** One stage's cost, from its timeline (shared/costs.py stage_cost). */
+export type StageCost = {
+  stage: string;
+  llm_usd: number;
+  gpu_usd: number;
+  gpu_seconds: number;
+  runner_usd: number;
+  total_usd: number;
+  unpriced_models: string[];
+};
+
+/** What the stage behind a gate will likely cost (shared/costs.py estimate). */
+export type CostEstimate = {
+  stage: string;
+  llm_usd: number;
+  gpu: string | null;
+  gpu_seconds: number;
+  gpu_usd: number;
+  runner_usd: number;
+  total_usd: number;
+  /** What the numbers came from, in plain words. */
+  basis: string[];
+};
+
+export type JobCost = {
+  computed_at: number;
+  spent: { stages: StageCost[]; total_usd: number; unpriced_models: string[] };
+  next: CostEstimate | null;
+};
+
+export function jobCost(job: Job): JobCost | null {
+  if (!job.cost) return null;
+  try {
+    return JSON.parse(job.cost);
+  } catch {
+    return null;
+  }
+}
+
+/** Dollars for a cost line: two decimals, or "<$0.01" for a fraction of a cent. */
+export function usd(value: number): string {
+  if (value > 0 && value < 0.005) return "<$0.01";
+  return `$${value.toFixed(2)}`;
+}
 
 /**
  * One thing a job's worker did: a stage, a LangGraph node, an LLM or tool

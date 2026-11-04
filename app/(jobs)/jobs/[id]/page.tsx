@@ -9,7 +9,7 @@ import useSWR, { useSWRConfig } from "swr";
 import { StageBar, StatusBadge, relativeTime } from "@/components/status";
 import { AgentTrace } from "@/components/agent-trace";
 import { AUTO, pathwayByName } from "@/lib/pathways";
-import { MODELS, STATUS, jobParams, rerunnable, type Job } from "@/lib/types";
+import { MODELS, STATUS, jobCost, jobParams, rerunnable, usd, type Job } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const textFetcher = (url: string) =>
@@ -103,6 +103,7 @@ export default function JobDetail({
   }
 
   const active = job.status === STATUS.RUNNING || job.status === STATUS.QUEUED;
+  const spent = jobCost(job)?.spent.total_usd ?? null;
   const isPathway = job.kind === "pathway";
   const p = jobParams(job);
   // A research job shows its pathway's inputs once Scout's have been approved.
@@ -160,6 +161,11 @@ export default function JobDetail({
           <span className="text-xs text-zinc-500">
             {relativeTime(job.created_at)}
           </span>
+          {spent !== null && (
+            <span className="text-xs text-zinc-500" title="Estimated from the job's timeline at list prices">
+              {usd(spent)} spent
+            </span>
+          )}
         </div>
       </header>
 
@@ -180,6 +186,7 @@ export default function JobDetail({
           <p className="text-sm text-amber-100">
             {GATE_PROMPT[job.stage] ?? `Approve and run ${job.stage}?`}
           </p>
+          <GateCost job={job} />
           <div className="mt-3 flex gap-2">
             <button
               onClick={() => act("approve")}
@@ -263,6 +270,60 @@ export default function JobDetail({
  * Delete this job and its agent trace, after a second click to confirm.
  * Not offered while the job is queued or running: cancel it first.
  */
+/**
+ * What approving the gate will cost, and what the job has cost so far, so the
+ * money is in front of whoever clicks Approve. Written by the worker when the
+ * job reached the gate (seesaw's shared/costs.py); estimates, not bills.
+ */
+function GateCost({ job }: { job: Job }) {
+  const cost = jobCost(job);
+  if (!cost) {
+    return (
+      <p className="mt-2 text-xs text-amber-200/70">
+        No cost estimate: this job reached its gate before costs were recorded.
+      </p>
+    );
+  }
+  const next = cost.next?.stage === job.stage ? cost.next : null;
+  const parts = next
+    ? [
+        `Claude ${usd(next.llm_usd)}`,
+        ...(next.gpu_seconds
+          ? [`GPU ${usd(next.gpu_usd)} (~${Math.round(next.gpu_seconds / 60)} min ${next.gpu})`]
+          : []),
+        `runner ${usd(next.runner_usd)}`,
+      ]
+    : [];
+  return (
+    <div className="mt-3 rounded-md border border-amber-500/20 bg-black/20 px-3 py-2 text-sm">
+      {next && (
+        <>
+          <p className="text-amber-50">
+            Approving costs about{" "}
+            <span className="font-semibold">{usd(next.total_usd)}</span>
+            <span className="text-amber-200/70"> · {parts.join(" · ")}</span>
+          </p>
+          {next.basis.length > 0 && (
+            <ul className="mt-1 list-disc pl-5 text-xs text-amber-200/70">
+              {next.basis.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+      <p className="mt-1 text-xs text-amber-200/70">
+        Spent so far {usd(cost.spent.total_usd)}
+        {cost.spent.stages.length > 0 &&
+          ` (${cost.spent.stages.map((s) => `${s.stage} ${usd(s.total_usd)}`).join(", ")})`}
+        {cost.spent.unpriced_models.length > 0 &&
+          `; not priced: ${cost.spent.unpriced_models.join(", ")}`}
+        . Estimates at list prices; the Anthropic and Modal bills are the record.
+      </p>
+    </div>
+  );
+}
+
 function DeleteControl({ jobId }: { jobId: string }) {
   const router = useRouter();
   const { mutate } = useSWRConfig();
