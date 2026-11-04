@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createJob, listJobs } from "@/lib/db";
-import { pathwayByName } from "@/lib/pathways";
+import { AUTO, pathwayByName } from "@/lib/pathways";
 import { runnerMode, startStage } from "@/lib/runner";
 
 export const runtime = "nodejs";
@@ -14,8 +14,10 @@ export async function GET() {
  * Insert a queued research job, then start a worker on it if we're running
  * alongside the agents. Deployed away from them, the row just waits for a poller.
  *
- * Body: { question, model, autoApprove, pathway? }. A pathway is Scout's
- * starting plan; Scout chooses its inputs, so none are taken here.
+ * Body: { question, model, autoApprove, pathway?, search? }. A pathway is
+ * Scout's starting plan; Scout chooses its inputs, so none are taken here.
+ * "auto" has Scout choose the pathway too (or none). `search` gives Scout its
+ * literature search tools.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -27,7 +29,9 @@ export async function POST(request: Request) {
   }
 
   let pathway: string | undefined;
-  if (body?.pathway !== undefined && body.pathway !== null) {
+  if (body?.pathway === AUTO) {
+    pathway = AUTO;
+  } else if (body?.pathway !== undefined && body.pathway !== null) {
     const found = pathwayByName(body.pathway);
     if (!found) {
       return NextResponse.json(
@@ -44,9 +48,14 @@ export async function POST(request: Request) {
     pathway = found.name;
   }
 
+  if (body?.search !== undefined && typeof body.search !== "boolean") {
+    return NextResponse.json({ error: "search must be true or false" }, { status: 400 });
+  }
+  const search = body?.search === true;
+
   let job;
   try {
-    job = await createJob(question, model, Boolean(body?.autoApprove), pathway);
+    job = await createJob(question, model, Boolean(body?.autoApprove), pathway, search);
   } catch (error) {
     // The only expected failure: a store whose schema predates the params column.
     if (/column .*(kind|params)/.test(String(error))) {

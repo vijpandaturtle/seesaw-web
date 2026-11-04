@@ -78,7 +78,9 @@ export async function getJob(id: string): Promise<Job | null> {
 
 /**
  * Insert a queued research job at Scout. A pathway, if given, is stored in
- * params for Scout to start its plan from; Scout picks the inputs.
+ * params for Scout to start its plan from; Scout picks the inputs. "auto"
+ * has Scout choose the pathway (or none). `search` turns on Scout's
+ * literature search; seesaw's jobs.create takes only these two keys.
  *
  * The kind and params columns are added by the Python side, which owns the
  * table's schema; on a store no current worker has opened yet, this insert
@@ -89,10 +91,12 @@ export async function createJob(
   model: string,
   autoApprove: boolean,
   pathway?: string,
+  search = false,
 ): Promise<Job> {
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const ts = now();
-  const params = pathway ? JSON.stringify({ pathway }) : null;
+  const fields = { ...(pathway && { pathway }), ...(search && { search: true }) };
+  const params = Object.keys(fields).length ? JSON.stringify(fields) : null;
   await query(
     `INSERT INTO jobs (id, question, model, status, stage, auto_approve,
                        created_at, updated_at, kind, params)

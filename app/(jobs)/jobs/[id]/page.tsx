@@ -8,7 +8,7 @@ import useSWR, { useSWRConfig } from "swr";
 
 import { StageBar, StatusBadge, relativeTime } from "@/components/status";
 import { AgentTrace } from "@/components/agent-trace";
-import { pathwayByName } from "@/lib/pathways";
+import { AUTO, pathwayByName } from "@/lib/pathways";
 import { MODELS, STATUS, jobParams, rerunnable, type Job } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -104,13 +104,22 @@ export default function JobDetail({
 
   const active = job.status === STATUS.RUNNING || job.status === STATUS.QUEUED;
   const isPathway = job.kind === "pathway";
-  const tabs = TABS[isPathway ? "pathway" : "research"];
+  const p = jobParams(job);
+  // A research job shows its pathway's inputs once Scout's have been approved.
+  const tabs: [Tab, string][] = isPathway
+    ? TABS.pathway
+    : p.pathway_params
+      ? [...TABS.research.slice(0, -1), ["inputs", "Pathway inputs"], ...TABS.research.slice(-1)]
+      : TABS.research;
   const tab = chosenTab && tabs.some(([k]) => k === chosenTab) ? chosenTab : tabs[0][0];
   // A research job's pathway is Scout's starting plan; a pathway job (from
   // before Scout chose the inputs) ran it directly.
-  const pathwayName = jobParams(job).pathway;
+  const pathwayName = typeof p.pathway === "string" ? p.pathway : undefined;
   const pathway = pathwayName ? pathwayByName(pathwayName) : undefined;
-  const rerunOf = jobParams(job).rerun_of as string | undefined;
+  const rerunOf = p.rerun_of as string | undefined;
+  // Under "auto", Scout chose the pathway (or none) and said why.
+  const scoutChose = p.pathway_request === AUTO;
+  const why = typeof p.pathway_why === "string" ? p.pathway_why : undefined;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -120,8 +129,16 @@ export default function JobDetail({
           <StatusBadge status={job.status} />
           {(isPathway || pathway) && (
             <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs text-zinc-300">
-              /{pathway?.command ?? "pathway"}
+              /{pathway?.command ?? pathwayName ?? "pathway"}
             </span>
+          )}
+          {scoutChose && pathwayName && (
+            <span className="text-xs text-zinc-500" title={why}>
+              chosen by Scout{why && <>: {why}</>}
+            </span>
+          )}
+          {scoutChose && !pathwayName && why && (
+            <span className="text-xs text-zinc-500">Scout chose no pathway: {why}</span>
           )}
           {rerunOf && (
             <Link
@@ -533,10 +550,22 @@ function PathwayResultView({ job }: { job: Job }) {
   );
 }
 
+/** Params that say how the job runs rather than being a pathway input. */
+const NOT_INPUTS = ["pathway", "pathway_request", "pathway_why", "search", "rerun_of"];
+
 function PathwayInputs({ job }: { job: Job }) {
-  const { pathway: _name, ...inputs } = jobParams(job);
-  const fields = pathwayByName(_name)?.fields ?? [];
-  const label = (key: string) => fields.find((f) => f.key === key)?.label ?? key;
+  const params = jobParams(job);
+  // A research job keeps Scout's approved inputs under pathway_params; an
+  // older pathway job stored them alongside the pathway's name.
+  const inputs =
+    params.pathway_params && typeof params.pathway_params === "object"
+      ? (params.pathway_params as Record<string, unknown>)
+      : Object.fromEntries(
+          Object.entries(params).filter(([key]) => !NOT_INPUTS.includes(key)),
+        );
+  const fields = pathwayByName(params.pathway)?.fields ?? [];
+  const field = (key: string) => fields.find((f) => f.key === key);
+  const label = (key: string) => field(key)?.label ?? key;
 
   return (
     <div className="space-y-4">
@@ -544,9 +573,11 @@ function PathwayInputs({ job }: { job: Job }) {
         <section key={key}>
           <h2 className="mb-1 text-xs font-medium text-zinc-400">{label(key)}</h2>
           <pre className="overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-300">
-            {Array.isArray(value)
-              ? value.map((v) => JSON.stringify(v)).join("\n")
-              : JSON.stringify(value)}
+            {field(key)?.text && typeof value === "string"
+              ? value
+              : Array.isArray(value)
+                ? value.map((v) => JSON.stringify(v)).join("\n")
+                : JSON.stringify(value)}
           </pre>
         </section>
       ))}
