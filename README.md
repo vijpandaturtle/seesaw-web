@@ -36,9 +36,12 @@ cp .env.example .env.local
 npm run dev
 ```
 
-With no `DATABASE_URL`, the job store is the seesaw checkout's local SQLite
-file; `SEESAW_OUTPUTS_DIR` defaults to `../seesaw/outputs`, so side-by-side
-checkouts need almost no configuration. Set `SEESAW_REPO_DIR` as well and
+Set `DATABASE_URL` to the same Postgres job store the seesaw checkout uses.
+The dashboard reads only Postgres, so jobs a worker writes to its local SQLite
+file (no `DATABASE_URL`, or `SEESAW_DB_PATH` set) never show here. To try jobs
+without mixing them into the live table, set the same `SEESAW_DB_SCHEMA` on
+both sides. `SEESAW_OUTPUTS_DIR` defaults to `../seesaw/outputs`, so
+side-by-side checkouts need nothing else. Set `SEESAW_REPO_DIR` as well and
 creating a job will actually run it.
 
 ## Starting a job
@@ -77,7 +80,7 @@ a pathway's steps show their numbers and plots. Click a row for its data:
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Postgres job store. Unset means the local SQLite file |
+| `DATABASE_URL` | Postgres job store, the same one the seesaw workers use. Required |
 | `SEESAW_DB_SCHEMA` | Use the jobs table in this schema, like the Python side does: an isolated copy for trial runs |
 | `SEESAW_OUTPUTS_DIR` | A seesaw checkout's `outputs/`, for reading artifacts locally |
 | `SEESAW_REPO_DIR` | Enables local mode — the API spawns a worker itself |
