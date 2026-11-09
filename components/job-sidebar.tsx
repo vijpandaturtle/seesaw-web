@@ -8,6 +8,7 @@ import useSWR from "swr";
 import { relativeTime } from "@/components/status";
 import { jobModels, shortName } from "@/lib/models";
 import { pathwayByName } from "@/lib/pathways";
+import { useCaseForJob } from "@/lib/use-cases";
 import { STATUS, jobParams, type Job } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -46,7 +47,10 @@ function group(jobs: Job[]): Group[] {
   ].filter((g) => g.jobs.length > 0);
 }
 
+/** What the job is for: its use case, else its pathway, else "research". */
 function kindLabel(job: Job): string {
+  const useCase = useCaseForJob(jobParams(job));
+  if (useCase) return useCase.title;
   if (job.kind !== "pathway") return "research";
   return pathwayByName(jobParams(job).pathway)?.command ?? "pathway";
 }
@@ -135,7 +139,7 @@ function JobList({
                             {job.question}
                           </span>
                           <span className="block truncate text-[11px] text-zinc-600">
-                            <span className="font-mono">{kindLabel(job)}</span> ·{" "}
+                            <span>{kindLabel(job)}</span> ·{" "}
                             {jobModels(job).map(shortName).join(", ")} · {relativeTime(job.created_at)}
                           </span>
                         </span>

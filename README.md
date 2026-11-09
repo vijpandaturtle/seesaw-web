@@ -122,6 +122,21 @@ Refresh that with:
 The two `example-*` datasheets in `data/` hold invented numbers and carry an
 **Example data** badge. They stay until real datasheets replace them.
 
+## Use cases
+
+The new-job page leads with use cases: a job to do with a model, the outcome
+metric it's scored by, and the baseline without interpretability it's compared
+with. Picking one attaches its main pathway and records `use_case` on the job;
+the sidebar and job page label every job by its use case. Pathways are still
+there, as methods, under `/`.
+
+The catalog lives in seesaw (`seesaw/use_cases.py`); `data/use-cases.json` is
+a copy. Refresh it whenever that file changes:
+
+```bash
+./scripts/sync-use-cases.sh
+```
+
 ## Layout
 
 ```

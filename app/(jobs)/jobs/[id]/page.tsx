@@ -12,6 +12,7 @@ import { AUTO, pathwayByName } from "@/lib/pathways";
 import { ModelPicker } from "@/components/model-picker";
 import { incompatibility, jobModels, shortName } from "@/lib/models";
 import { STATUS, jobCost, jobParams, rerunnable, usd, type Job } from "@/lib/types";
+import { STATUS_LABEL, useCaseForJob, type UseCase } from "@/lib/use-cases";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 const textFetcher = (url: string) =>
@@ -125,6 +126,7 @@ export default function JobDetail({
   // Under "auto", Scout chose the pathway (or none) and said why.
   const scoutChose = p.pathway_request === AUTO;
   const why = typeof p.pathway_why === "string" ? p.pathway_why : undefined;
+  const useCase = useCaseForJob(p);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -174,6 +176,7 @@ export default function JobDetail({
             </span>
           )}
         </div>
+        {useCase && <UseCasePanel useCase={useCase} named={p.use_case === useCase.name} />}
       </header>
 
       {actionError && (
@@ -707,6 +710,41 @@ function PathwayInputs({ job }: { job: Job }) {
           </pre>
         </section>
       ))}
+    </div>
+  );
+}
+
+/**
+ * What the job is for: its use case, the outcome it's scored by and the
+ * baseline it's compared with. Until seesaw runs the baseline arm and reports
+ * the outcome metric, this says so rather than implying the verdict answers it.
+ */
+function UseCasePanel({ useCase: u, named }: { useCase: UseCase; named: boolean }) {
+  const scored = u.track === "use";
+  return (
+    <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs leading-relaxed">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-zinc-500">{scored ? "Use case" : "Understanding"}</span>
+        <span className="text-sm text-zinc-100">{u.title}</span>
+        <span className="text-zinc-600">{STATUS_LABEL[u.status]}</span>
+        {!named && <span className="text-zinc-600">(from the pathway it ran)</span>}
+      </div>
+      <dl className="mt-2 grid gap-x-6 gap-y-1 sm:grid-cols-2">
+        <div>
+          <dt className="text-zinc-600">{scored ? "Outcome metric" : "Reports"}</dt>
+          <dd className="text-zinc-300">{u.metric}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-600">{scored ? "Baseline without interp" : "Control"}</dt>
+          <dd className="text-zinc-300">{u.baseline}</dd>
+        </div>
+      </dl>
+      {u.status !== "runnable" && (
+        <p className="mt-2 text-amber-300/80">
+          Baseline not run and outcome not scored yet, so the verdict below doesn&apos;t answer
+          the use case on its own: {u.gap}.
+        </p>
+      )}
     </div>
   );
 }

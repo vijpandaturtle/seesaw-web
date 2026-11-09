@@ -81,7 +81,8 @@ export async function getJob(id: string): Promise<Job | null> {
  * Insert a queued research job at Scout. A pathway, if given, is stored in
  * params for Scout to start its plan from; Scout picks the inputs. "auto"
  * has Scout choose the pathway (or none). `search` turns on Scout's
- * literature search; seesaw's jobs.create takes only these two keys.
+ * literature search. `useCase` records which of seesaw's use cases the job is
+ * for (the API checks it, as seesaw's jobs.create does).
  *
  * The kind and params columns are added by the Python side, which owns the
  * table's schema; on a store no current worker has opened yet, this insert
@@ -94,6 +95,7 @@ export async function createJob(
   pathway?: string,
   search = false,
   otherModel?: string,
+  useCase?: string,
 ): Promise<Job> {
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const ts = now();
@@ -103,6 +105,7 @@ export async function createJob(
     ...(search && { search: true }),
     models,
     ...(otherModel && { other_model: otherModel }),
+    ...(useCase && { use_case: useCase }),
   };
   const params = JSON.stringify(fields);
   await query(
@@ -154,6 +157,7 @@ export async function rerunJob(
      JSON.stringify({
        pathway: name, pathway_params: params.pathway_params, rerun_of: source.id, models: targets,
        ...(params.other_model ? { other_model: params.other_model } : {}),
+       ...(params.use_case ? { use_case: params.use_case } : {}),
      })],
   );
   return { job: (await getJob(newId))! };

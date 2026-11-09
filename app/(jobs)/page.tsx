@@ -7,16 +7,18 @@ import useSWR, { useSWRConfig } from "swr";
 import { ModelPicker } from "@/components/model-picker";
 import { RunnerNotice } from "@/components/shell";
 import { DEFAULT_MODEL, incompatibility } from "@/lib/models";
-import { AUTO, OFFERED, type Pathway } from "@/lib/pathways";
+import { AUTO, OFFERED, pathwayByName, type Pathway } from "@/lib/pathways";
+import { STATUS_LABEL, USE_CASES, type UseCase } from "@/lib/use-cases";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 /**
- * The new-job composer. Plain text is a research question for Scout → Lens →
- * Quill; a leading "/" opens the pathway menu, and picking one attaches it to
- * the question as Scout's starting plan. Scout decides the pathway's inputs.
- * With none picked, Scout chooses a pathway itself (or none), unless the user
- * asks for no pathway at all.
+ * The new-job composer. It leads with use cases: a job to do with a model,
+ * scored by an outcome metric and compared with a baseline that uses no
+ * interpretability. Picking one attaches its main pathway, which Scout
+ * chooses the inputs for. A leading "/" picks a pathway (a method) directly.
+ * With neither, Scout chooses a pathway itself (or none), unless the user asks
+ * for no pathway at all.
  */
 export default function NewJobPage() {
   const router = useRouter();
@@ -25,6 +27,8 @@ export default function NewJobPage() {
 
   const [text, setText] = useState("");
   const [pathway, setPathway] = useState<Pathway | null>(null);
+  // The use case the job is for, when it was started from one.
+  const [useCase, setUseCase] = useState<UseCase | null>(null);
   // Without a picked pathway: let Scout choose one (AUTO), or run none.
   const [scoutChooses, setScoutChooses] = useState(true);
   const [search, setSearch] = useState(false);
@@ -55,8 +59,9 @@ export default function NewJobPage() {
     text.trim() !== "" && slash === null && models.length > 0 && !blocked &&
     (!compares || otherModel.length === 1);
 
-  function choose(p: Pathway) {
+  function choose(p: Pathway, forUseCase: UseCase | null = null) {
     setPathway(p);
+    setUseCase(forUseCase);
     setText("");
     setError(null);
     // Keep the models this pathway can run; fall back to one it can.
@@ -66,8 +71,14 @@ export default function NewJobPage() {
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
+  function chooseUseCase(u: UseCase) {
+    const p = pathwayByName(u.pathways[0]);
+    if (p) choose(p, u);
+  }
+
   function clearPathway() {
     setPathway(null);
+    setUseCase(null);
     setError(null);
     requestAnimationFrame(() => inputRef.current?.focus());
   }
@@ -81,6 +92,7 @@ export default function NewJobPage() {
       models,
       ...(compares && { otherModel: otherModel[0] }),
       autoApprove,
+      ...(useCase && { useCase: useCase.name }),
       pathway: pathway?.name ?? (scoutChooses ? AUTO : undefined),
       search,
     };
@@ -136,35 +148,52 @@ export default function NewJobPage() {
         What do you want to find out?
       </h1>
       <p className="mb-6 text-sm text-zinc-500">
-        Ask a question and Scout, Lens and Quill research it. Type{" "}
+        Pick a use case below, or ask a question and Scout, Lens and Quill research it. Type{" "}
         <kbd className="rounded border border-zinc-700 px-1 font-mono text-xs text-zinc-300">/</kbd>{" "}
-        to give Scout a pathway to start from; it picks the prompts and inputs itself.
-        Otherwise Scout chooses a pathway that fits, or none.
+        to pick a method (pathway) directly; Scout picks the prompts and inputs either way.
       </p>
 
       <div className="relative rounded-xl border border-zinc-800 bg-zinc-900/50 focus-within:border-zinc-600">
         {pathway && (
           <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-800 py-0.5 pr-1 pl-2 font-mono text-sm text-zinc-100">
-              /{pathway.command}
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-800 py-0.5 pr-1 pl-2 text-sm text-zinc-100">
+              {useCase ? (
+                <>
+                  {useCase.title}
+                  <span className="font-mono text-xs text-zinc-400">/{pathway.command}</span>
+                </>
+              ) : (
+                <span className="font-mono">/{pathway.command}</span>
+              )}
               <button
                 onClick={clearPathway}
-                aria-label="Remove the pathway"
+                aria-label={useCase ? "Remove the use case" : "Remove the pathway"}
                 className="rounded px-1 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200"
               >
                 ×
               </button>
             </span>
-            <span className="text-xs text-zinc-500">{pathway.summary}</span>
+            {useCase ? (
+              <span className="text-xs text-zinc-500">
+                Scored by {useCase.metric}; compared with {useCase.baseline}.
+              </span>
+            ) : (
+              <span className="text-xs text-zinc-500">{pathway.summary}</span>
+            )}
+            {useCase && useCase.status !== "runnable" && (
+              <span className="basis-full text-xs text-amber-300/80">
+                Not measured yet: {useCase.gap}.
+              </span>
+            )}
             {text === "" && (
               <button
                 onClick={() => {
-                  setText(pathway.example);
+                  setText(useCase?.example || pathway.example);
                   inputRef.current?.focus();
                 }}
                 className="basis-full text-left text-xs text-zinc-400 hover:text-zinc-200"
               >
-                Try: <span className="italic">{pathway.example}</span>
+                Try: <span className="italic">{useCase?.example || pathway.example}</span>
               </button>
             )}
           </div>
@@ -184,7 +213,7 @@ export default function NewJobPage() {
           onKeyDown={onQuestionKey}
           placeholder={
             pathway
-              ? pathway.example
+              ? useCase?.example || pathway.example
               : "What attention heads mediate indirect object identification in Gemma-2-2B?"
           }
           rows={3}
@@ -302,27 +331,140 @@ export default function NewJobPage() {
       )}
 
       {!pathway && slash === null && (
-        <section className="mt-10">
-          <h2 className="mb-3 text-xs font-medium tracking-wide text-zinc-500 uppercase">
-            Pathways
-          </h2>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {OFFERED.map((p) => (
-              <button
-                key={p.name}
-                onClick={() => choose(p)}
-                className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
-              >
-                <div className="font-mono text-xs text-zinc-200">/{p.command}</div>
-                <div className="mt-1 text-xs leading-relaxed text-zinc-500">{p.summary}</div>
-                <div className="mt-2 text-xs leading-relaxed text-zinc-400 italic">
-                  e.g. {p.example}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
+        <UseCaseMenu onChoose={chooseUseCase} onChoosePathway={(p) => choose(p)} />
       )}
     </main>
+  );
+}
+
+const STATUS_STYLE: Record<UseCase["status"], string> = {
+  runnable: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+  partial: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  planned: "border-zinc-700 bg-zinc-800/60 text-zinc-400",
+};
+
+function StatusPill({ status }: { status: UseCase["status"] }) {
+  return (
+    <span className={`shrink-0 rounded border px-1.5 py-px text-[10px] font-medium ${STATUS_STYLE[status]}`}>
+      {STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+/**
+ * The home page's menu: use cases first (text, then vision), then
+ * understanding a model, then the pathways themselves as methods.
+ */
+function UseCaseMenu({
+  onChoose,
+  onChoosePathway,
+}: {
+  onChoose: (u: UseCase) => void;
+  onChoosePathway: (p: Pathway) => void;
+}) {
+  const jobs = USE_CASES.filter((u) => u.track === "use");
+  const groups: [string, UseCase[]][] = [
+    ["Text models", jobs.filter((u) => u.modality === "text")],
+    ["Vision models, through lever", jobs.filter((u) => u.modality === "vision")],
+  ];
+  const understand = USE_CASES.filter((u) => u.track === "understand");
+
+  return (
+    <div className="mt-10 space-y-10">
+      <section>
+        <h2 className="text-xs font-medium tracking-wide text-zinc-500 uppercase">Use cases</h2>
+        <p className="mt-1 mb-4 text-xs text-zinc-500">
+          Each is a job to do with a model, scored by an outcome and compared with the best way
+          to do it without interpretability.
+        </p>
+        <div className="space-y-6">
+          {groups.map(([label, cases]) => (
+            <div key={label}>
+              <h3 className="mb-2 text-xs text-zinc-400">{label}</h3>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {cases.map((u) => (
+                  <UseCaseCard key={u.name} useCase={u} onChoose={onChoose} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
+          Understanding a model
+        </h2>
+        <p className="mt-1 mb-4 text-xs text-zinc-500">
+          Explaining how the model works, with no outcome to beat.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {understand.map((u) => (
+            <button
+              key={u.name}
+              onClick={() => onChoose(u)}
+              className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 text-left transition hover:border-zinc-700 hover:bg-zinc-900"
+            >
+              <div className="text-sm text-zinc-200">{u.title}</div>
+              <div className="mt-1 text-xs leading-relaxed text-zinc-500">{u.question}</div>
+              <div className="mt-2 font-mono text-[11px] text-zinc-600">/{commandFor(u.pathways[0])}</div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-xs font-medium tracking-wide text-zinc-500 uppercase">Methods</h2>
+        <div className="flex flex-wrap gap-1.5">
+          {OFFERED.map((p) => (
+            <button
+              key={p.name}
+              onClick={() => onChoosePathway(p)}
+              title={p.summary}
+              className="rounded-md border border-zinc-800 px-2 py-1 font-mono text-xs text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200"
+            >
+              /{p.command}
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function commandFor(pathway: string | undefined): string {
+  return (pathway && pathwayByName(pathway)?.command) || pathway || "";
+}
+
+function UseCaseCard({ useCase: u, onChoose }: { useCase: UseCase; onChoose: (u: UseCase) => void }) {
+  const planned = u.status === "planned";
+  const how = planned ? u.tools.join(" · ") : u.pathways.map((p) => `/${commandFor(p)}`).join(" · ");
+  return (
+    <button
+      onClick={() => !planned && onChoose(u)}
+      aria-disabled={planned}
+      title={planned ? `Not runnable yet: ${u.gap}` : undefined}
+      className={`flex flex-col rounded-lg border border-zinc-800 bg-zinc-900/30 p-3 text-left transition ${
+        planned ? "cursor-default opacity-60" : "hover:border-zinc-700 hover:bg-zinc-900"
+      }`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-sm font-medium text-zinc-100">{u.title}</span>
+        <StatusPill status={u.status} />
+      </div>
+      <div className="mt-1 text-xs leading-relaxed text-zinc-400">{u.question}</div>
+      <dl className="mt-3 space-y-1 text-xs leading-relaxed">
+        <div>
+          <dt className="inline text-zinc-600">Scored by </dt>
+          <dd className="inline text-zinc-400">{u.metric}</dd>
+        </div>
+        <div>
+          <dt className="inline text-zinc-600">Compared with </dt>
+          <dd className="inline text-zinc-400">{u.baseline}</dd>
+        </div>
+      </dl>
+      {u.gap && <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">{planned ? "Needs: " : "Missing: "}{u.gap}</p>}
+      {how && <div className="mt-auto pt-2 font-mono text-[11px] text-zinc-600">{how}</div>}
+    </button>
   );
 }
