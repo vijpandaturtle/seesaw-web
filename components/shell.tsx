@@ -26,12 +26,6 @@ export function Masthead() {
         </span>
 
         <nav className="ml-auto flex items-center gap-3 text-xs whitespace-nowrap sm:gap-4">
-          <Link
-            href="/models"
-            className="text-zinc-400 transition hover:text-zinc-100"
-          >
-            Models
-          </Link>
           <a
             href="https://github.com/vijpandaturtle/seesaw"
             target="_blank"

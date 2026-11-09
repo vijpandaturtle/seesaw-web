@@ -101,27 +101,6 @@ key by visiting `?key=…` once, which stores a cookie, or send an `x-seesaw-key
 header. Unset `WRITE_KEY` and the gate is inert, which is what local development
 wants.
 
-## Model Atlas
-
-`/models` is a read-only gallery of interpretability datasheets, one per model;
-`/models/<slug>` shows one, with its provenance (weights revision, dtype, hooks,
-preprocessing) above every section. The spec is
-[docs/model-atlas-spec.md](docs/model-atlas-spec.md).
-
-seesaw writes `outputs/datasheets/<slug>/datasheet.json`, and that file is all
-this app reads. Sections render by their `view` (`metrics`, `layer_curve`,
-`heatmap`, `table`, `note`), so new probes need no change here. Locally the
-datasheets come from the seesaw checkout, falling back to the committed
-snapshot when it has none yet; deployed they come from `data/datasheets/`.
-Refresh that with:
-
-```bash
-./scripts/sync-datasheet-data.sh
-```
-
-The two `example-*` datasheets in `data/` hold invented numbers and carry an
-**Example data** badge. They stay until real datasheets replace them.
-
 ## Use cases
 
 The new-job page leads with AI safety use cases, grouped by what they do:
@@ -144,19 +123,14 @@ a copy. Refresh it whenever that file changes:
 app/api/jobs/             list, create, and per-job read/delete
 app/api/jobs/[id]/action  approve, retry, cancel
 app/api/artifact/         plans, bundles, critiques, plots — proxied to Modal when deployed
-app/api/models/           datasheet index and per-model datasheet
 app/(jobs)/page.tsx       new-job composer (questions, optional /pathway)
 app/(jobs)/jobs/[id]/     job detail
 app/(jobs)/layout.tsx     the past-jobs sidebar around both
 lib/pathways.ts           pathway catalog, mirrored from seesaw
-app/models/               Model Atlas gallery and datasheet pages
-components/datasheet-views.tsx  section renderers (inline SVG charts)
 lib/db.ts                 every query against the job store
 lib/runner.ts             choosing and invoking a runner
 lib/paths.ts              local checkout vs committed snapshot
 lib/types.ts              shapes and constants shared with client components
-lib/datasheets.ts         reading datasheet.json files
-lib/datasheet-types.ts    datasheet shapes and per-view validation
 middleware.ts             the write gate
 ```
 
