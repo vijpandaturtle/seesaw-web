@@ -720,11 +720,13 @@ function PathwayInputs({ job }: { job: Job }) {
  * the outcome metric, this says so rather than implying the verdict answers it.
  */
 function UseCasePanel({ useCase: u, named }: { useCase: UseCase; named: boolean }) {
-  const scored = u.track === "use";
+  const scored = u.area !== "understand";
   return (
     <div className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs leading-relaxed">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-zinc-500">{scored ? "Use case" : "Understanding"}</span>
+        <span className="text-zinc-500">
+          {scored ? `${u.area[0].toUpperCase()}${u.area.slice(1)}` : "Understanding"}
+        </span>
         <span className="text-sm text-zinc-100">{u.title}</span>
         <span className="text-zinc-600">{STATUS_LABEL[u.status]}</span>
         {!named && <span className="text-zinc-600">(from the pathway it ran)</span>}

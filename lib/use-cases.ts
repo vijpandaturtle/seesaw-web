@@ -1,7 +1,8 @@
 /**
- * What seesaw is for, as use cases: a job to do with a model, the outcome
- * metric it's scored by, and the baseline without interpretability it has to
- * beat. Pathways are the methods a use case runs.
+ * What seesaw is for, as AI safety use cases: a job to do with a model, the
+ * outcome metric it's scored by, and the baseline without interpretability it
+ * has to beat. Each sits in an area: monitor, audit, fix, or understand.
+ * Pathways are the methods a use case runs.
  *
  * The catalog lives in seesaw (seesaw/use_cases.py). data/use-cases.json is a
  * copy, refreshed with scripts/sync-use-cases.sh; don't edit it by hand.
@@ -12,12 +13,15 @@ import catalog from "@/data/use-cases.json";
 
 export type UseCaseStatus = "runnable" | "partial" | "planned";
 
+/** What a use case does for safety. "understand" has no outcome to beat. */
+export type Area = "monitor" | "audit" | "fix" | "understand";
+
 export type UseCase = {
   name: string;
   title: string;
   /** The question someone brings, in their words. */
   question: string;
-  /** How a result is scored (for the understand track, what the pathway reports). */
+  /** How a result is scored (for the understand area, what the pathway reports). */
   metric: string;
   /** The best way to do the job without interpretability. */
   baseline: string;
@@ -30,11 +34,13 @@ export type UseCase = {
   /** What stands between the use case and runnable. Empty when runnable. */
   gap: string;
   example: string;
-  /** "use": a job with an outcome to beat. "understand": explaining a model. */
-  track: "use" | "understand";
+  area: Area;
 };
 
 export const USE_CASES = catalog.use_cases as UseCase[];
+
+/** The areas in display order, with seesaw's label for each ("Monitor: catch unsafe …"). */
+export const AREAS = catalog.areas as { name: Area; label: string }[];
 
 export const STATUS_LABEL: Record<UseCaseStatus, string> = {
   runnable: "Runnable",

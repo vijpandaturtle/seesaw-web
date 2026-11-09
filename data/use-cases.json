@@ -4,115 +4,82 @@
     "partial",
     "planned"
   ],
+  "areas": [
+    {
+      "name": "monitor",
+      "label": "Monitor: catch unsafe behavior at runtime"
+    },
+    {
+      "name": "audit",
+      "label": "Audit: find a hidden problem before deployment"
+    },
+    {
+      "name": "fix",
+      "label": "Fix: remove or steer an unsafe behavior"
+    },
+    {
+      "name": "understand",
+      "label": "Understand: explain how the model works, with no outcome to beat"
+    }
+  ],
   "use_cases": [
     {
-      "name": "detect_a_property",
-      "title": "Detect a property",
-      "question": "Would a monitor on the model's activations flag X on new texts, better than the words alone?",
-      "metric": "held-out accuracy of the activation probe",
+      "name": "build_a_safety_monitor",
+      "title": "Build a safety monitor",
+      "question": "Would a monitor on the model's activations flag deception, prompt injection or harmful intent on new texts, better than the words alone?",
+      "metric": "held-out accuracy of the activation probe, on texts from a different source",
       "baseline": "bag-of-words and embeddings-only probes on the same texts, and shuffled labels",
       "status": "runnable",
+      "area": "monitor",
       "modality": "text",
       "pathways": [
         "probe_monitor"
       ],
       "tools": [],
       "gap": "",
-      "example": "Would a linear probe on the residual stream detect sarcasm better than a bag-of-words baseline?",
-      "track": "use"
+      "example": "Would a linear probe on the residual stream flag prompt-injection attempts better than a bag-of-words baseline?"
     },
     {
-      "name": "remove_spurious_correlation",
-      "title": "Remove a spurious correlation",
-      "question": "Does the answer depend on something it shouldn't, and can I remove that without breaking the task?",
-      "metric": "accuracy on a balanced or shifted test set after the fix",
-      "baseline": "fine-tuning or reweighting on rebalanced data",
-      "status": "partial",
+      "name": "check_reasoning_faithfulness",
+      "title": "Check reasoning faithfulness",
+      "question": "Does the model's stated reasoning reflect what actually drives its answer?",
+      "metric": "how often the stated reason matches the input the answer causally depends on",
+      "baseline": "counterfactual edits to the prompt, read off the output alone",
+      "status": "planned",
+      "area": "monitor",
       "modality": "text",
-      "pathways": [
-        "spurious_audit"
-      ],
+      "pathways": [],
       "tools": [],
-      "gap": "spurious_audit measures the dependence and checks the task survives erasure; it doesn't yet score a shifted test set or run a rebalanced baseline",
-      "example": "Does sentiment classification depend on the reviewer's name, and can erasing it keep the task working?",
-      "track": "use"
-    },
-    {
-      "name": "steer_behavior",
-      "title": "Steer or edit a behavior",
-      "question": "Can I turn a behavior up or down without damaging everything else?",
-      "metric": "size of the targeted change, against collateral damage on unrelated text",
-      "baseline": "prompting, and fine-tuning",
-      "status": "partial",
-      "modality": "text",
-      "pathways": [
-        "concept_direction"
-      ],
-      "tools": [],
-      "gap": "concept_direction measures the change against random directions and checks control texts; it doesn't yet run a prompting baseline",
-      "example": "Is grammatical gender in occupation words a direction the model uses, and can removing it stop gendered pronoun predictions?",
-      "track": "use"
-    },
-    {
-      "name": "edit_or_unlearn_fact",
-      "title": "Edit or unlearn a fact",
-      "question": "Can I change or remove one fact and keep the rest of what the model knows?",
-      "metric": "the edit's efficacy and paraphrase generalization, against damage to neighboring facts",
-      "baseline": "fine-tuning on the new fact; gradient-ascent unlearning",
-      "status": "partial",
-      "modality": "text",
-      "pathways": [
-        "editing_comparison",
-        "factual_recall"
-      ],
-      "tools": [],
-      "gap": "editing_comparison scores ROME edits on efficacy, paraphrases and neighbors; it doesn't yet unlearn (forget vs. retain) or run a fine-tuning baseline",
-      "example": "Is the layer where causal tracing locates a landmark's city the best layer to edit it with ROME?",
-      "track": "use"
-    },
-    {
-      "name": "explain_a_finetune",
-      "title": "Explain a fine-tune",
-      "question": "What did a fine-tune change, and where in the weights?",
-      "metric": "recall of a planted change, and false alarms",
-      "baseline": "comparing the two models' outputs on eval sets",
-      "status": "partial",
-      "modality": "text",
-      "pathways": [
-        "model_diffing"
-      ],
-      "tools": [],
-      "gap": "model_diffing reports where the models differ; it has no fine-tunes with a planted change to score recall and false alarms against, and no output-diff baseline",
-      "example": "What did instruction tuning change between Qwen2.5-1.5B and Qwen2.5-1.5B-Instruct, and in which layers?",
-      "track": "use"
+      "gap": "needs a pathway that plants a hint the answer depends on and checks whether the reasoning mentions it, with attribution to tell what the answer used",
+      "example": ""
     },
     {
       "name": "find_failure_modes",
       "title": "Find failure modes",
-      "question": "Where does my model break, and can its internals point me there faster?",
+      "question": "Where does my model break or behave unsafely, and can its internals point me there faster?",
       "metric": "distinct failures found under a fixed query budget, and how severe they are",
       "baseline": "black-box red-teaming and fuzzing under the same budget",
       "status": "planned",
+      "area": "audit",
       "modality": "text",
       "pathways": [],
       "tools": [],
       "gap": "needs a pathway that searches from the model's internals (push along a direction or feature, or attack the activations, then find real inputs that do the same) and a scorer for distinct failures; find_a_backdoor is its version with a planted answer",
-      "example": "",
-      "track": "use"
+      "example": ""
     },
     {
       "name": "find_a_backdoor",
       "title": "Find a backdoor",
-      "question": "Does this model have a hidden trigger, and what is it?",
+      "question": "Does this model have a hidden trigger that switches on bad behavior, and what is it?",
       "metric": "whether the trigger was identified, and in how many queries",
       "baseline": "black-box red-teaming under the same query budget",
       "status": "planned",
+      "area": "audit",
       "modality": "text",
       "pathways": [],
       "tools": [],
       "gap": "needs model organisms with a planted trigger (a LoRA on a small model) and a pathway that searches under a fixed query budget",
-      "example": "",
-      "track": "use"
+      "example": ""
     },
     {
       "name": "audit_hidden_objective",
@@ -121,37 +88,100 @@
       "metric": "whether the audit names the planted goal or behavior",
       "baseline": "behavioral testing and prompting",
       "status": "planned",
+      "area": "audit",
       "modality": "text",
       "pathways": [],
       "tools": [],
       "gap": "needs model organisms with a planted objective; Scout and Lens would plan the audit freely, scored against the plant",
-      "example": "",
-      "track": "use"
+      "example": ""
     },
     {
-      "name": "remove_spurious_background",
-      "title": "Remove a spurious background",
-      "question": "Is my image classifier using the background instead of the object?",
-      "metric": "worst-group accuracy on a balanced test set (Waterbirds)",
-      "baseline": "group reweighting, and retraining the linear head",
+      "name": "detect_sandbagging",
+      "title": "Detect sandbagging",
+      "question": "Is the model deliberately underperforming on a capability evaluation?",
+      "metric": "accuracy at telling sandbagging model organisms from honest ones, and false alarms",
+      "baseline": "behavioral evals: elicitation with fine-tuning or few-shot prompting",
       "status": "planned",
-      "modality": "vision",
+      "area": "audit",
+      "modality": "text",
       "pathways": [],
-      "tools": [
-        "clip_direct_effects",
-        "clip_head_ablation"
-      ],
-      "gap": "the lever tools nominate and ablate CLIP heads; there's no pathway yet that picks heads and scores worst-group accuracy",
-      "example": "Which CLIP heads carry the background in Waterbirds, and does ablating them raise worst-group accuracy?",
-      "track": "use"
+      "tools": [],
+      "gap": "needs model organisms trained to hide a capability, and a pathway that compares what the activations know with what the output says",
+      "example": ""
     },
     {
-      "name": "resist_typographic_attack",
-      "title": "Resist a typographic attack",
-      "question": "Does text written in the image override what the image shows?",
+      "name": "audit_a_finetune",
+      "title": "Audit a fine-tune",
+      "question": "Did a fine-tune change more than it was meant to, such as making the model broadly misaligned?",
+      "metric": "recall of a planted change, and false alarms",
+      "baseline": "comparing the two models' outputs on eval sets",
+      "status": "partial",
+      "area": "audit",
+      "modality": "text",
+      "pathways": [
+        "model_diffing"
+      ],
+      "tools": [],
+      "gap": "model_diffing reports where the models differ; it has no fine-tunes with a planted change to score recall and false alarms against, and no output-diff baseline",
+      "example": "What did instruction tuning change between Qwen2.5-1.5B and Qwen2.5-1.5B-Instruct, and in which layers?"
+    },
+    {
+      "name": "steer_unsafe_behavior",
+      "title": "Steer away from unsafe behavior",
+      "question": "Can I turn down a behavior like sycophancy or bias without damaging everything else?",
+      "metric": "size of the targeted change, against collateral damage on unrelated text",
+      "baseline": "prompting, and safety fine-tuning",
+      "status": "partial",
+      "area": "fix",
+      "modality": "text",
+      "pathways": [
+        "concept_direction"
+      ],
+      "tools": [],
+      "gap": "concept_direction measures the change against random directions and checks control texts; it doesn't yet run a prompting baseline",
+      "example": "Is grammatical gender in occupation words a direction the model uses, and can removing it stop gendered pronoun predictions?"
+    },
+    {
+      "name": "remove_spurious_correlation",
+      "title": "Remove a spurious correlation",
+      "question": "Does the answer depend on something it shouldn't, like a name or a dialect, and can I remove that without breaking the task?",
+      "metric": "accuracy on a balanced or shifted test set after the fix",
+      "baseline": "fine-tuning or reweighting on rebalanced data",
+      "status": "partial",
+      "area": "fix",
+      "modality": "text",
+      "pathways": [
+        "spurious_audit"
+      ],
+      "tools": [],
+      "gap": "spurious_audit measures the dependence and checks the task survives erasure; it doesn't yet score a shifted test set or run a rebalanced baseline",
+      "example": "Does sentiment classification depend on the reviewer's name, and can erasing it keep the task working?"
+    },
+    {
+      "name": "unlearn_knowledge",
+      "title": "Edit or unlearn knowledge",
+      "question": "Can I remove hazardous knowledge, or correct a fact, and keep the rest of what the model knows?",
+      "metric": "forgetting on the target (a WMDP-style set), against ability kept elsewhere; for edits, efficacy and paraphrases against damage to neighboring facts",
+      "baseline": "gradient-ascent unlearning; fine-tuning on the corrected fact",
+      "status": "partial",
+      "area": "fix",
+      "modality": "text",
+      "pathways": [
+        "editing_comparison",
+        "factual_recall"
+      ],
+      "tools": [],
+      "gap": "editing_comparison scores ROME edits on single facts; it doesn't yet unlearn a body of knowledge or run a gradient-based baseline",
+      "example": "Is the layer where causal tracing locates a landmark's city the best layer to edit it with ROME?"
+    },
+    {
+      "name": "resist_image_injection",
+      "title": "Resist prompt injection in images",
+      "question": "Does text written in an image override what the image shows, or what the user asked?",
       "metric": "accuracy on attacked images, against accuracy on clean ones",
       "baseline": "prompting, and a light fine-tune on attacked images",
       "status": "planned",
+      "area": "fix",
       "modality": "vision",
       "pathways": [],
       "tools": [
@@ -160,16 +190,16 @@
         "activation_patching"
       ],
       "gap": "the lever tools can find and ablate the heads that read the text; there's no pathway or attacked test set yet",
-      "example": "Which CLIP heads read text stamped on an image, and does ablating them stop the label flipping?",
-      "track": "use"
+      "example": "Which CLIP heads read text stamped on an image, and does ablating them stop the label flipping?"
     },
     {
       "name": "reduce_hallucination",
       "title": "Reduce object hallucination",
-      "question": "Is my VLM answering from the image, or from what the language model expects?",
+      "question": "Is my VLM answering from the image, or making things up from what the language model expects?",
       "metric": "accuracy on yes/no object questions (POPE-style)",
       "baseline": "prompting, and contrastive decoding",
       "status": "planned",
+      "area": "fix",
       "modality": "vision",
       "pathways": [],
       "tools": [
@@ -178,8 +208,24 @@
         "logit_lens"
       ],
       "gap": "the lever tools measure how much an answer needs the image; there's no pathway yet that intervenes and scores hallucination",
-      "example": "How much of LLaVA's answer to 'Is there a dog in the image?' comes from the image rather than the language prior?",
-      "track": "use"
+      "example": "How much of LLaVA's answer to 'Is there a dog in the image?' comes from the image rather than the language prior?"
+    },
+    {
+      "name": "remove_spurious_background",
+      "title": "Remove a spurious background",
+      "question": "Is my image classifier using the background instead of the object?",
+      "metric": "worst-group accuracy on a balanced test set (Waterbirds)",
+      "baseline": "group reweighting, and retraining the linear head",
+      "status": "planned",
+      "area": "fix",
+      "modality": "vision",
+      "pathways": [],
+      "tools": [
+        "clip_direct_effects",
+        "clip_head_ablation"
+      ],
+      "gap": "the lever tools nominate and ablate CLIP heads; there's no pathway yet that picks heads and scores worst-group accuracy",
+      "example": "Which CLIP heads carry the background in Waterbirds, and does ablating them raise worst-group accuracy?"
     },
     {
       "name": "understand_a_capability",
@@ -188,14 +234,14 @@
       "metric": "circuit faithfulness: how much of the behavior the circuit recovers",
       "baseline": "random circuits of the same size",
       "status": "runnable",
+      "area": "understand",
       "modality": "text",
       "pathways": [
         "circuit_discovery"
       ],
       "tools": [],
       "gap": "",
-      "example": "Which attention heads and MLPs implement indirect object identification?",
-      "track": "understand"
+      "example": "Which attention heads and MLPs implement indirect object identification?"
     },
     {
       "name": "locate_a_fact",
@@ -204,14 +250,14 @@
       "metric": "indirect effect of restoring each layer and position",
       "baseline": "corrupted-run effect",
       "status": "runnable",
+      "area": "understand",
       "modality": "text",
       "pathways": [
         "factual_recall"
       ],
       "tools": [],
       "gap": "",
-      "example": "At which layers and token positions does the model recall the city a landmark is in?",
-      "track": "understand"
+      "example": "At which layers and token positions does the model recall the city a landmark is in?"
     },
     {
       "name": "explain_an_output",
@@ -220,14 +266,14 @@
       "metric": "how much clamping the top SAE features moves the answer",
       "baseline": "random features at the same layer",
       "status": "runnable",
+      "area": "understand",
       "modality": "text",
       "pathways": [
         "feature_explain"
       ],
       "tools": [],
       "gap": "",
-      "example": "Which SAE features drive the model to complete a famous quote?",
-      "track": "understand"
+      "example": "Which SAE features drive the model to complete a famous quote?"
     }
   ]
 }

@@ -124,9 +124,10 @@ The two `example-*` datasheets in `data/` hold invented numbers and carry an
 
 ## Use cases
 
-The new-job page leads with use cases: a job to do with a model, the outcome
-metric it's scored by, and the baseline without interpretability it's compared
-with. Picking one attaches its main pathway and records `use_case` on the job;
+The new-job page leads with AI safety use cases, grouped by what they do:
+monitor (catch unsafe behavior at runtime), audit (find a hidden problem before
+deployment) and fix (remove or steer it). Each shows the outcome metric it's
+scored by and the baseline without interpretability it's compared with. Picking one attaches its main pathway and records `use_case` on the job;
 the sidebar and job page label every job by its use case. Pathways are still
 there, as methods, under `/`.
 

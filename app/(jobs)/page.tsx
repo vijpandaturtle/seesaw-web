@@ -8,14 +8,14 @@ import { ModelPicker } from "@/components/model-picker";
 import { RunnerNotice } from "@/components/shell";
 import { DEFAULT_MODEL, incompatibility } from "@/lib/models";
 import { AUTO, OFFERED, pathwayByName, type Pathway } from "@/lib/pathways";
-import { STATUS_LABEL, USE_CASES, type UseCase } from "@/lib/use-cases";
+import { AREAS, STATUS_LABEL, USE_CASES, type UseCase } from "@/lib/use-cases";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 /**
- * The new-job composer. It leads with use cases: a job to do with a model,
- * scored by an outcome metric and compared with a baseline that uses no
- * interpretability. Picking one attaches its main pathway, which Scout
+ * The new-job composer. It leads with AI safety use cases (monitor, audit,
+ * fix): a job to do with a model, scored by an outcome metric and compared
+ * with a baseline that uses no interpretability. Picking one attaches its main pathway, which Scout
  * chooses the inputs for. A leading "/" picks a pathway (a method) directly.
  * With neither, Scout chooses a pathway itself (or none), unless the user asks
  * for no pathway at all.
@@ -148,7 +148,7 @@ export default function NewJobPage() {
         What do you want to find out?
       </h1>
       <p className="mb-6 text-sm text-zinc-500">
-        Pick a use case below, or ask a question and Scout, Lens and Quill research it. Type{" "}
+        Pick a safety use case below, or ask a question and Scout, Lens and Quill research it. Type{" "}
         <kbd className="rounded border border-zinc-700 px-1 font-mono text-xs text-zinc-300">/</kbd>{" "}
         to pick a method (pathway) directly; Scout picks the prompts and inputs either way.
       </p>
@@ -352,8 +352,8 @@ function StatusPill({ status }: { status: UseCase["status"] }) {
 }
 
 /**
- * The home page's menu: use cases first (text, then vision), then
- * understanding a model, then the pathways themselves as methods.
+ * The home page's menu: safety use cases grouped by what they do (monitor,
+ * audit, fix), then understanding a model, then the pathways as methods.
  */
 function UseCaseMenu({
   onChoose,
@@ -362,32 +362,37 @@ function UseCaseMenu({
   onChoose: (u: UseCase) => void;
   onChoosePathway: (p: Pathway) => void;
 }) {
-  const jobs = USE_CASES.filter((u) => u.track === "use");
-  const groups: [string, UseCase[]][] = [
-    ["Text models", jobs.filter((u) => u.modality === "text")],
-    ["Vision models, through lever", jobs.filter((u) => u.modality === "vision")],
-  ];
-  const understand = USE_CASES.filter((u) => u.track === "understand");
+  const jobs = AREAS.filter((a) => a.name !== "understand");
+  const understandArea = AREAS.find((a) => a.name === "understand");
+  const understand = USE_CASES.filter((u) => u.area === "understand");
 
   return (
     <div className="mt-10 space-y-10">
       <section>
-        <h2 className="text-xs font-medium tracking-wide text-zinc-500 uppercase">Use cases</h2>
+        <h2 className="text-xs font-medium tracking-wide text-zinc-500 uppercase">
+          Safety use cases
+        </h2>
         <p className="mt-1 mb-4 text-xs text-zinc-500">
-          Each is a job to do with a model, scored by an outcome and compared with the best way
-          to do it without interpretability.
+          Each is a safety job to do with a model, scored by an outcome and compared with the best
+          way to do it without interpretability.
         </p>
         <div className="space-y-6">
-          {groups.map(([label, cases]) => (
-            <div key={label}>
-              <h3 className="mb-2 text-xs text-zinc-400">{label}</h3>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {cases.map((u) => (
-                  <UseCaseCard key={u.name} useCase={u} onChoose={onChoose} />
-                ))}
+          {jobs.map((area) => {
+            const [name, what] = splitLabel(area.label);
+            return (
+              <div key={area.name}>
+                <h3 className="mb-2 text-xs">
+                  <span className="font-medium text-zinc-200">{name}</span>
+                  {what && <span className="text-zinc-500"> · {what}</span>}
+                </h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {USE_CASES.filter((u) => u.area === area.name).map((u) => (
+                    <UseCaseCard key={u.name} useCase={u} onChoose={onChoose} />
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -396,7 +401,7 @@ function UseCaseMenu({
           Understanding a model
         </h2>
         <p className="mt-1 mb-4 text-xs text-zinc-500">
-          Explaining how the model works, with no outcome to beat.
+          {understandArea ? splitLabel(understandArea.label)[1] : ""}
         </p>
         <div className="grid gap-2 sm:grid-cols-3">
           {understand.map((u) => (
@@ -432,6 +437,12 @@ function UseCaseMenu({
   );
 }
 
+/** "Monitor: catch unsafe behavior at runtime" → ["Monitor", "catch unsafe behavior at runtime"]. */
+function splitLabel(label: string): [string, string] {
+  const i = label.indexOf(":");
+  return i < 0 ? [label, ""] : [label.slice(0, i), label.slice(i + 1).trim()];
+}
+
 function commandFor(pathway: string | undefined): string {
   return (pathway && pathwayByName(pathway)?.command) || pathway || "";
 }
@@ -449,7 +460,12 @@ function UseCaseCard({ useCase: u, onChoose }: { useCase: UseCase; onChoose: (u:
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-medium text-zinc-100">{u.title}</span>
+        <span className="text-sm font-medium text-zinc-100">
+          {u.title}
+          {u.modality === "vision" && (
+            <span className="ml-1.5 align-middle text-[10px] font-normal text-zinc-500">vision</span>
+          )}
+        </span>
         <StatusPill status={u.status} />
       </div>
       <div className="mt-1 text-xs leading-relaxed text-zinc-400">{u.question}</div>
