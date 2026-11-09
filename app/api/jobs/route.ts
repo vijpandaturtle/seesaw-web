@@ -4,6 +4,7 @@ import { createJob, listJobs } from "@/lib/db";
 import { DEFAULT_MODEL, cleanModels, incompatibility } from "@/lib/models";
 import { AUTO, pathwayByName } from "@/lib/pathways";
 import { runnerMode, startStage } from "@/lib/runner";
+import { useCaseByName } from "@/lib/use-cases";
 
 export const runtime = "nodejs";
 
@@ -15,12 +16,13 @@ export async function GET() {
  * Insert a queued research job, then start a worker on it if we're running
  * alongside the agents. Deployed away from them, the row just waits for a poller.
  *
- * Body: { question, models, otherModel?, autoApprove, pathway?, search? }.
+ * Body: { question, models, otherModel?, autoApprove, useCase?, pathway?, search? }.
  * `models` lists every model the job runs on (a single `model` string is
  * still accepted). A pathway is Scout's starting plan; Scout chooses its
  * inputs, so none are taken here, except model_diffing's `otherModel`: the
  * changed model compared with the first. "auto" has Scout choose the pathway
- * too (or none). `search` gives Scout its literature search tools.
+ * too (or none). `search` gives Scout its literature search tools. `useCase`
+ * records what the job is for; with no pathway named, its main pathway runs.
  */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
@@ -32,6 +34,32 @@ export async function POST(request: Request) {
   const question = typeof body?.question === "string" ? body.question.trim() : "";
   if (!question) {
     return NextResponse.json({ error: "question is required" }, { status: 400 });
+  }
+
+  let useCase: string | undefined;
+  if (body?.useCase !== undefined && body.useCase !== null) {
+    const found = useCaseByName(body.useCase);
+    if (!found) {
+      return NextResponse.json(
+        { error: `unknown use case ${JSON.stringify(body.useCase)}` },
+        { status: 400 },
+      );
+    }
+    if (found.status === "planned") {
+      return NextResponse.json(
+        { error: `${found.title} isn't runnable yet: ${found.gap}` },
+        { status: 400 },
+      );
+    }
+    if (body.pathway === undefined || body.pathway === null || body.pathway === AUTO) {
+      body.pathway = found.pathways[0];
+    } else if (!found.pathways.includes(body.pathway)) {
+      return NextResponse.json(
+        { error: `${found.title} runs ${found.pathways.join(" or ")}, not ${body.pathway}` },
+        { status: 400 },
+      );
+    }
+    useCase = found.name;
   }
 
   let pathway: string | undefined;
@@ -78,7 +106,9 @@ export async function POST(request: Request) {
 
   let job;
   try {
-    job = await createJob(question, models, Boolean(body?.autoApprove), pathway, search, otherModel);
+    job = await createJob(
+      question, models, Boolean(body?.autoApprove), pathway, search, otherModel, useCase,
+    );
   } catch (error) {
     // The only expected failure: a store whose schema predates the params column.
     if (/column .*(kind|params)/.test(String(error))) {

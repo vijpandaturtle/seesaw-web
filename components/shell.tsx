@@ -22,7 +22,7 @@ export function Masthead() {
         </Link>
 
         <span className="hidden text-xs text-zinc-500 sm:inline">
-          Making pragmatic interpretability accessible.
+          Interpretability for AI safety, measured against baselines.
         </span>
 
         <nav className="ml-auto flex items-center gap-3 text-xs whitespace-nowrap sm:gap-4">
