@@ -87,6 +87,20 @@
       "track": "use"
     },
     {
+      "name": "find_failure_modes",
+      "title": "Find failure modes",
+      "question": "Where does my model break, and can its internals point me there faster?",
+      "metric": "distinct failures found under a fixed query budget, and how severe they are",
+      "baseline": "black-box red-teaming and fuzzing under the same budget",
+      "status": "planned",
+      "modality": "text",
+      "pathways": [],
+      "tools": [],
+      "gap": "needs a pathway that searches from the model's internals (push along a direction or feature, or attack the activations, then find real inputs that do the same) and a scorer for distinct failures; find_a_backdoor is its version with a planted answer",
+      "example": "",
+      "track": "use"
+    },
+    {
       "name": "find_a_backdoor",
       "title": "Find a backdoor",
       "question": "Does this model have a hidden trigger, and what is it?",
