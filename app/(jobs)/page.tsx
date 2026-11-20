@@ -5,12 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
-import {
-  ActionPicker,
-  BehaviorDetailsEditor,
-  emptyDraft,
-  type Draft,
-} from "@/components/behavior-details";
+import { BehaviorDetailsEditor, emptyDraft, type Draft } from "@/components/behavior-details";
 import { ModelPicker } from "@/components/model-picker";
 import { RunnerNotice } from "@/components/shell";
 import { LIBRARY, type LibraryBehavior } from "@/lib/library";
@@ -20,42 +15,69 @@ import { AUTO, OFFERED, pathwayByName, type Pathway } from "@/lib/pathways";
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 /**
- * The new-job composer. A user picks three things:
+ * The new-job composer. The user picks what they want:
  *
- * - a mode: why they're here. Diagnose a behavior they saw; Screen a model
- *   for several known behaviors before it ships; or Compare two versions of a
- *   model after a change.
- * - a behavior: what the model does, in a sentence, with real cases where it
- *   does it and the closest ones where it doesn't (components/behavior-details.tsx),
- *   or one from the library (lib/library.ts).
- * - an action: monitor it, audit it, or fix it. Screen and Compare always audit.
+ * - Monitor: a detector for a behavior, shipped only if it beats a text
+ *   classifier on the same examples.
+ * - Audit: whether a behavior is there and where it comes from. It audits a
+ *   behavior you saw, a checklist of known behaviors before you ship (one
+ *   audit job each; no combined scorecard yet), or what changed between two
+ *   versions (model_diffing; earlier jobs aren't rerun on the new one yet).
+ * - Fix: a change to the model that removes the behavior, shipped only if it
+ *   beats a better prompt.
  *
- * Scout picks the method (pathway) from those; a leading "/" in Diagnose
- * picks one directly. Screen starts one audit job per behavior: there's no
- * combined scorecard yet. Compare runs model_diffing on the two models: it
- * doesn't rerun earlier jobs on the new one yet.
+ * Every choice except the checklist takes the behavior in a sentence, with
+ * real cases where the model does it and the closest ones where it doesn't
+ * (components/behavior-details.tsx), or one from the library (lib/library.ts).
+ * Scout picks the method (pathway); a leading "/" picks one directly.
  */
 
-type Mode = "diagnose" | "screen" | "compare";
+type Action = "monitor" | "audit" | "fix";
+type AuditScope = "behavior" | "checklist" | "versions";
 
-const MODES: { id: Mode; label: string; when: string; heading: string }[] = [
+const ACTIONS: { id: Action; label: string; what: string; heading: string; intro: string }[] = [
   {
-    id: "diagnose",
-    label: "Diagnose",
-    when: "You saw it do something",
-    heading: "What did the model do?",
+    id: "monitor",
+    label: "Monitor",
+    what: "Catch it at runtime",
+    heading: "What should the monitor catch?",
+    intro:
+      "Say what the model does and add real cases. Seesaw builds a detector on its activations, and recommends it only if it beats a text classifier trained on the same examples.",
   },
   {
-    id: "screen",
-    label: "Screen",
-    when: "Before you ship it",
-    heading: "Which behaviors should this model be screened for?",
+    id: "audit",
+    label: "Audit",
+    what: "Find out if it's there, and why",
+    heading: "What do you want to audit?",
+    intro: "",
   },
   {
-    id: "compare",
-    label: "Compare",
-    when: "After you changed it",
-    heading: "What might have changed between the two versions?",
+    id: "fix",
+    label: "Fix",
+    what: "Remove it from the model",
+    heading: "What should the model stop doing?",
+    intro:
+      "Say what the model does wrong and add real cases. Seesaw finds a change to the model that removes it, and recommends it only if it beats a better prompt without breaking anything else.",
+  },
+];
+
+const SCOPES: { id: AuditScope; label: string; intro: string }[] = [
+  {
+    id: "behavior",
+    label: "A behavior you saw",
+    intro:
+      "Say what it does and add real cases where you saw it. Seesaw finds whether it's built into the model, and where it comes from.",
+  },
+  {
+    id: "checklist",
+    label: "A checklist, before you ship",
+    intro: "Pick known behaviors from the library. Each runs as its own audit of the model.",
+  },
+  {
+    id: "versions",
+    label: "Two versions, after a change",
+    intro:
+      "Pick the model before and after the change, and the behavior you're worried about. Seesaw diffs their internals on it.",
   },
 ];
 
@@ -68,14 +90,15 @@ export default function NewJobPage() {
   const { mutate } = useSWRConfig();
   const { data } = useSWR<{ runner?: string }>("/api/jobs", fetcher);
 
-  const [mode, setMode] = useState<Mode>("diagnose");
+  const [action, setAction] = useState<Action>("monitor");
+  const [scope, setScope] = useState<AuditScope>("behavior");
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   // The library entry the behavior was filled from, if any (remounts the examples open).
   const [fromLibrary, setFromLibrary] = useState<string | null>(null);
-  // Screen mode: the library behaviors to run.
+  // Audit › checklist: the library behaviors to run.
   const [checked, setChecked] = useState<string[]>(["prompt_injection", "sycophancy"]);
-  // A pathway picked with "/" (Diagnose only).
+  // A pathway picked with "/".
   const [slashPathway, setSlashPathway] = useState<Pathway | null>(null);
   const [scoutChooses, setScoutChooses] = useState(true);
   const [search, setSearch] = useState(false);
@@ -88,13 +111,15 @@ export default function NewJobPage() {
   const [started, setStarted] = useState<Started[] | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const pathway = mode === "compare" ? MODEL_DIFFING : mode === "diagnose" ? slashPathway : null;
-  const compares = mode === "compare";
-  const current = MODES.find((m) => m.id === mode)!;
+  const checklist = action === "audit" && scope === "checklist";
+  const compares = action === "audit" && scope === "versions";
+  const pathway = compares ? MODEL_DIFFING : checklist ? null : slashPathway;
+  const current = ACTIONS.find((a) => a.id === action)!;
+  const intro = action === "audit" ? SCOPES.find((s) => s.id === scope)!.intro : current.intro;
 
-  // The slash menu: open while the box holds a single "/word" (Diagnose only).
+  // The slash menu: open while the box holds a single "/word".
   const slash =
-    mode === "diagnose" && !slashPathway && /^\/[\w-]*$/.test(text)
+    !checklist && !compares && !slashPathway && /^\/[\w-]*$/.test(text)
       ? text.slice(1).toLowerCase()
       : null;
   const matches = useMemo(
@@ -110,15 +135,24 @@ export default function NewJobPage() {
     models.length > 0 &&
     !blocked &&
     slash === null &&
-    (mode === "screen" ? checked.length > 0 : text.trim() !== "") &&
+    (checklist ? checked.length > 0 : text.trim() !== "") &&
     (!compares || otherModel.length === 1);
 
-  function switchMode(next: Mode) {
-    setMode(next);
+  function reset() {
     setError(null);
     setStarted(null);
-    if (next === "compare") setModels((m) => m.slice(0, 1));
     requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function chooseAction(next: Action) {
+    setAction(next);
+    reset();
+  }
+
+  function chooseScope(next: AuditScope) {
+    setScope(next);
+    if (next === "versions") setModels((m) => m.slice(0, 1));
+    reset();
   }
 
   function choosePathway(p: Pathway) {
@@ -131,7 +165,7 @@ export default function NewJobPage() {
   }
 
   function applyLibrary(entry: LibraryBehavior) {
-    if (mode === "screen") {
+    if (checklist) {
       setChecked((c) =>
         c.includes(entry.id) ? c.filter((id) => id !== entry.id) : [...c, entry.id],
       );
@@ -141,7 +175,6 @@ export default function NewJobPage() {
     setDraft({
       examples: entry.examples.map((c) => ({ ...c })),
       nonExamples: entry.nonExamples.map((c) => ({ ...c })),
-      action: mode === "diagnose" ? entry.action : "audit",
     });
     setFromLibrary(entry.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -151,15 +184,11 @@ export default function NewJobPage() {
   async function post(behavior: string, d: Draft): Promise<{ id?: string; error?: string }> {
     const body = {
       behavior,
-      details: {
-        examples: d.examples,
-        non_examples: d.nonExamples,
-        action: mode === "diagnose" ? d.action : "audit",
-      },
+      details: { examples: d.examples, non_examples: d.nonExamples, action },
       models,
       ...(compares && { otherModel: otherModel[0] }),
       autoApprove,
-      pathway: pathway?.name ?? (mode === "screen" || scoutChooses ? AUTO : undefined),
+      pathway: pathway?.name ?? (checklist || scoutChooses ? AUTO : undefined),
       search,
     };
     const res = await fetch("/api/jobs", {
@@ -176,13 +205,12 @@ export default function NewJobPage() {
     if (!canStart || busy) return;
     setBusy(true);
     setError(null);
-    if (mode === "screen") {
+    if (checklist) {
       const results: Started[] = [];
       for (const entry of LIBRARY.filter((e) => checked.includes(e.id))) {
         const r = await post(entry.behavior, {
           examples: entry.examples,
           nonExamples: entry.nonExamples,
-          action: "audit",
         });
         results.push({ title: entry.title, ...r });
       }
@@ -230,24 +258,25 @@ export default function NewJobPage() {
     }
   }
 
-  const button =
-    mode === "screen"
-      ? `Screen for ${checked.length} behavior${checked.length === 1 ? "" : "s"}`
-      : current.label;
+  const button = checklist
+    ? `Audit ${checked.length} behavior${checked.length === 1 ? "" : "s"}`
+    : compares
+      ? "Compare versions"
+      : { monitor: "Build a monitor", audit: "Audit", fix: "Find a fix" }[action];
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-16">
       <RunnerNotice runner={data?.runner} />
 
-      <div role="tablist" aria-label="Mode" className="mb-6 grid grid-cols-3 gap-2">
-        {MODES.map((m) => {
-          const on = m.id === mode;
+      <div role="tablist" aria-label="What do you want?" className="mb-6 grid grid-cols-3 gap-2">
+        {ACTIONS.map((a) => {
+          const on = a.id === action;
           return (
             <button
-              key={m.id}
+              key={a.id}
               role="tab"
               aria-selected={on}
-              onClick={() => switchMode(m.id)}
+              onClick={() => chooseAction(a.id)}
               className={`rounded-lg border px-3 py-2 text-left transition ${
                 on
                   ? "border-zinc-500 bg-zinc-900"
@@ -255,38 +284,62 @@ export default function NewJobPage() {
               }`}
             >
               <div className={`text-sm font-medium ${on ? "text-zinc-100" : "text-zinc-300"}`}>
-                {m.label}
+                {a.label}
               </div>
-              <div className="text-xs text-zinc-500">{m.when}</div>
+              <div className="text-xs text-zinc-500">{a.what}</div>
             </button>
           );
         })}
       </div>
 
-      <h1 className="mb-1 text-xl font-semibold tracking-tight text-zinc-100">{current.heading}</h1>
+      <h1 className="mb-3 text-xl font-semibold tracking-tight text-zinc-100">{current.heading}</h1>
+      {action === "audit" && (
+        <div
+          role="radiogroup"
+          aria-label="What to audit"
+          className="mb-3 flex flex-wrap gap-1.5"
+        >
+          {SCOPES.map((s) => {
+            const on = s.id === scope;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => chooseScope(s.id)}
+                className={`rounded-md border px-2.5 py-1 text-xs transition ${
+                  on
+                    ? "border-zinc-400 bg-zinc-100 text-zinc-900"
+                    : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
+                }`}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <p className="mb-6 text-sm text-zinc-500">
-        {mode === "diagnose" && (
+        {intro}
+        {!checklist && !compares && (
           <>
-            Say what it does in a sentence and add real cases where you saw it, or start from the
-            library below. Scout picks the method; type{" "}
+            {" "}
+            Scout picks the method; type{" "}
             <kbd className="rounded border border-zinc-700 px-1 font-mono text-xs text-zinc-300">
               /
             </kbd>{" "}
             to pick one yourself.
           </>
         )}
-        {mode === "screen" &&
-          "Pick behaviors from the library. Each runs as its own audit of the model: does it do this, and where does it come from?"}
-        {mode === "compare" &&
-          "Pick the version before and after the change, and the behavior you're worried about. Seesaw diffs the two models' internals on it."}
       </p>
 
       <div className="relative rounded-xl border border-zinc-800 bg-zinc-900/50 focus-within:border-zinc-600">
-        {mode === "screen" ? (
+        {checklist ? (
           <CheckList checked={checked} onToggle={(e) => applyLibrary(e)} />
         ) : (
           <>
-            {slashPathway && (
+            {slashPathway && !compares && (
               <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-800 py-0.5 pr-1 pl-2 text-sm text-zinc-100">
                   <span className="font-mono">/{slashPathway.command}</span>
@@ -302,7 +355,7 @@ export default function NewJobPage() {
               </div>
             )}
             <label htmlFor="behavior" className="sr-only">
-              The behavior{mode === "diagnose" ? ", or / for a method" : ""}
+              The behavior{compares ? "" : ", or / for a method"}
             </label>
             <textarea
               id="behavior"
@@ -316,7 +369,7 @@ export default function NewJobPage() {
               }}
               onKeyDown={onKey}
               placeholder={
-                mode === "compare"
+                compares
                   ? "Agrees with the user more often since the fine-tune"
                   : "Gives up a correct answer when the user pushes back"
               }
@@ -355,23 +408,7 @@ export default function NewJobPage() {
                 )}
               </ul>
             )}
-          </>
-        )}
-
-        {slash === null && (
-          <>
-            <ActionPicker
-              value={mode === "diagnose" ? draft.action : "audit"}
-              lockedBy={
-                mode === "screen"
-                  ? "Screen audits each behavior."
-                  : mode === "compare"
-                    ? "Compare audits what changed."
-                    : undefined
-              }
-              onChange={(action) => setDraft({ ...draft, action })}
-            />
-            {mode !== "screen" && (
+            {slash === null && (
               <BehaviorDetailsEditor
                 key={fromLibrary ?? "own"}
                 draft={draft}
@@ -409,7 +446,7 @@ export default function NewJobPage() {
             )}
           </div>
           {blocked && <span className="w-full text-xs text-amber-300">{blocked}.</span>}
-          {mode === "diagnose" && !slashPathway && (
+          {!checklist && !compares && !slashPathway && (
             <>
               <label className="sr-only" htmlFor="pathway-mode">
                 Method
@@ -479,11 +516,11 @@ export default function NewJobPage() {
 
       {slash === null && (
         <LibraryMenu
-          showLibrary={mode !== "screen"}
+          showLibrary={!checklist}
           active={fromLibrary}
           onChoose={applyLibrary}
           onChoosePathway={(p) => {
-            switchMode("diagnose");
+            if (checklist || compares) setScope("behavior");
             choosePathway(p);
           }}
         />
@@ -499,7 +536,7 @@ const ACTION_TAG: Record<string, string> = {
   understand: "Audit",
 };
 
-/** Screen mode's box: the library as a checklist. */
+/** Audit › checklist: the library as a checklist. */
 function CheckList({
   checked,
   onToggle,
@@ -509,7 +546,7 @@ function CheckList({
 }) {
   return (
     <fieldset className="px-4 pt-3 pb-2">
-      <legend className="sr-only">Behaviors to screen for</legend>
+      <legend className="sr-only">Behaviors to audit</legend>
       <ul className="grid gap-1 sm:grid-cols-2">
         {LIBRARY.map((e) => (
           <li key={e.id}>
@@ -548,8 +585,8 @@ function BenchmarkedBadge() {
 }
 
 /**
- * Below the composer: the behavior library to start from (not in Screen mode,
- * where the checklist in the box is the library), then the methods.
+ * Below the composer: the behavior library to start from (not for the audit
+ * checklist, where the checklist in the box is the library), then the methods.
  */
 function LibraryMenu({
   showLibrary,
@@ -615,7 +652,7 @@ function LibraryMenu({
       <section>
         <h2 className="mb-1 text-xs font-medium tracking-wide text-zinc-500 uppercase">Methods</h2>
         <p className="mb-3 text-xs text-zinc-500">
-          Scout picks one for you. To run a specific method, pick it here or type / in Diagnose.
+          Scout picks one for you. To run a specific method, pick it here or type / in the box.
         </p>
         <div className="flex flex-wrap gap-1.5">
           {OFFERED.map((p) => (
