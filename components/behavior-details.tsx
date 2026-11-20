@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 
-import { MAX_EXAMPLES, type Action, type BehaviorCase } from "@/lib/behavior";
+import { MAX_EXAMPLES, type BehaviorCase } from "@/lib/behavior";
 
 /**
- * The details under the behavior sentence: what to do about it (the action),
- * real cases where the model does it, and the closest ones where it doesn't.
+ * The details under the behavior sentence: real cases where the model does
+ * it, and the closest ones where it doesn't.
  * All optional; blank rows are dropped when the job is created
  * (lib/behavior.ts). Collapsed, the examples say how many are filled in.
  */
@@ -14,90 +14,12 @@ import { MAX_EXAMPLES, type Action, type BehaviorCase } from "@/lib/behavior";
 export type Draft = {
   examples: BehaviorCase[];
   nonExamples: BehaviorCase[];
-  action: Action | undefined;
 };
 
 export const emptyDraft: Draft = {
   examples: [{ prompt: "", output: "" }],
   nonExamples: [{ prompt: "", output: "" }],
-  action: undefined,
 };
-
-/**
- * The three actions a user picks from. seesaw also accepts "understand",
- * which is an audit with no outcome to beat, so the composer folds it into
- * Audit rather than offering it.
- */
-export const USER_ACTIONS = ["monitor", "audit", "fix"] as const satisfies readonly Action[];
-
-const ACTION_LABEL: Record<Action, string> = {
-  monitor: "Monitor",
-  audit: "Audit",
-  fix: "Fix",
-  understand: "Understand",
-};
-
-/** What each action produces, and what it has to beat. */
-const ACTION_HINT: Record<Action, string> = {
-  monitor: "Get a detector for it, shipped only if it beats a text-only classifier.",
-  audit: "Find out whether it's there, where it comes from and why.",
-  fix: "Get a model without it, shipped only if it beats fixing it with a prompt.",
-  understand: "Explain how the model does it.",
-};
-
-/**
- * What to do about the behavior. Optional: with none picked, Scout infers it.
- * `lockedBy` fixes it (Screen and Compare always audit).
- */
-export function ActionPicker({
-  value,
-  lockedBy,
-  onChange,
-}: {
-  value: Action | undefined;
-  lockedBy?: string;
-  onChange: (action: Action | undefined) => void;
-}) {
-  const actionHint = (a: Action) => ACTION_HINT[a];
-  return (
-    <div className="border-t border-zinc-800/80 px-4 py-2.5">
-      <div
-        role="radiogroup"
-        aria-label="What do you want to do about it?"
-        className="flex flex-wrap items-center gap-1.5"
-      >
-        <span className="mr-1 text-xs text-zinc-400">What do you want to do?</span>
-        {USER_ACTIONS.map((action) => {
-          const on = value === action;
-          return (
-            <button
-              key={action}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              disabled={Boolean(lockedBy) && !on}
-              aria-label={ACTION_LABEL[action]}
-              title={actionHint(action)}
-              onClick={() => onChange(on ? undefined : action)}
-              className={`rounded-md border px-2 py-0.5 text-xs transition disabled:opacity-30 ${
-                on
-                  ? "border-zinc-400 bg-zinc-100 text-zinc-900"
-                  : "border-zinc-800 text-zinc-300 hover:border-zinc-600"
-              }`}
-            >
-              {ACTION_LABEL[action]}
-            </button>
-          );
-        })}
-      </div>
-      <p className="mt-1.5 text-xs text-zinc-600">
-        {value
-          ? actionHint(value) + (lockedBy ? ` ${lockedBy}` : "")
-          : "Optional: Scout infers it if you leave it."}
-      </p>
-    </div>
-  );
-}
 
 const filled = (cases: BehaviorCase[]) => cases.filter((c) => c.prompt.trim()).length;
 

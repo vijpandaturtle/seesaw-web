@@ -1,7 +1,7 @@
 /**
  * The behavior library: behaviors someone already wrote down, with examples
  * and an action, so a user can start from one instead of a blank box, and
- * Screen mode can run several against a model before it ships.
+ * the audit checklist can run several against a model before it ships.
  *
  * A starter set: each entry's examples are short illustrations written by
  * hand, not curated data. An entry earns a "benchmarked" mark once it has a
@@ -16,7 +16,7 @@ export type LibraryBehavior = {
   title: string;
   /** The behavior, in a sentence: what goes in the behavior box. */
   behavior: string;
-  /** What you'd usually do about it; Screen mode audits every entry regardless. */
+  /** What you'd usually do about it; the audit checklist audits every entry regardless. */
   action: Action;
   examples: BehaviorCase[];
   nonExamples: BehaviorCase[];
