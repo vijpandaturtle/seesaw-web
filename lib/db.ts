@@ -14,6 +14,7 @@ import { Pool } from "pg";
 
 import { incompatibility, jobModels } from "./models";
 import { pathwayByName } from "./pathways";
+import type { BehaviorDetails } from "./behavior";
 import { STATUS, jobParams, rerunnable, type Job, type JobEvent } from "./types";
 
 export { STAGES, STATUS, completedStages, type Job, type JobEvent } from "./types";
@@ -82,7 +83,9 @@ export async function getJob(id: string): Promise<Job | null> {
  * params for Scout to start its plan from; Scout picks the inputs. "auto"
  * has Scout choose the pathway (or none). `search` turns on Scout's
  * literature search. `useCase` records which of seesaw's use cases the job is
- * for (the API checks it, as seesaw's jobs.create does).
+ * for (the API checks it, as seesaw's jobs.create does). `behavior` holds the
+ * user's examples, non-examples and action; `question` is then the behavior
+ * in a sentence.
  *
  * The kind and params columns are added by the Python side, which owns the
  * table's schema; on a store no current worker has opened yet, this insert
@@ -96,6 +99,7 @@ export async function createJob(
   search = false,
   otherModel?: string,
   useCase?: string,
+  behavior?: BehaviorDetails,
 ): Promise<Job> {
   const id = crypto.randomUUID().replace(/-/g, "").slice(0, 8);
   const ts = now();
@@ -106,6 +110,7 @@ export async function createJob(
     models,
     ...(otherModel && { other_model: otherModel }),
     ...(useCase && { use_case: useCase }),
+    ...(behavior && Object.keys(behavior).length > 0 ? { behavior } : {}),
   };
   const params = JSON.stringify(fields);
   await query(
@@ -158,6 +163,7 @@ export async function rerunJob(
        pathway: name, pathway_params: params.pathway_params, rerun_of: source.id, models: targets,
        ...(params.other_model ? { other_model: params.other_model } : {}),
        ...(params.use_case ? { use_case: params.use_case } : {}),
+       ...(params.behavior ? { behavior: params.behavior } : {}),
      })],
   );
   return { job: (await getJob(newId))! };

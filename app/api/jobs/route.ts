@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { cleanBehavior } from "@/lib/behavior";
 import { createJob, listJobs } from "@/lib/db";
 import { DEFAULT_MODEL, cleanModels, incompatibility } from "@/lib/models";
 import { AUTO, pathwayByName } from "@/lib/pathways";
@@ -16,7 +17,11 @@ export async function GET() {
  * Insert a queued research job, then start a worker on it if we're running
  * alongside the agents. Deployed away from them, the row just waits for a poller.
  *
- * Body: { question, models, otherModel?, autoApprove, useCase?, pathway?, search? }.
+ * Body: { behavior, details?, models, otherModel?, autoApprove, useCase?, pathway?, search? }.
+ * `behavior` is what the model does, in a sentence (`question` is still
+ * accepted for it); `details` holds the user's examples, non-examples and
+ * action (lib/behavior.ts), which Scout builds its prompts from. A use case
+ * sets the action to its area and refuses a different one.
  * `models` lists every model the job runs on (a single `model` string is
  * still accepted). A pathway is Scout's starting plan; Scout chooses its
  * inputs, so none are taken here, except model_diffing's `otherModel`: the
@@ -31,9 +36,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: chosen.error }, { status: 400 });
   }
   const { models } = chosen;
-  const question = typeof body?.question === "string" ? body.question.trim() : "";
+  const said = body?.behavior ?? body?.question;
+  const question = typeof said === "string" ? said.trim() : "";
   if (!question) {
-    return NextResponse.json({ error: "question is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "say what behavior to investigate, in a sentence" },
+      { status: 400 },
+    );
+  }
+  const cleaned = cleanBehavior(body?.details);
+  if ("error" in cleaned) {
+    return NextResponse.json({ error: cleaned.error }, { status: 400 });
   }
 
   let useCase: string | undefined;
@@ -59,6 +72,13 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (cleaned.details.action && cleaned.details.action !== found.area) {
+      return NextResponse.json(
+        { error: `${found.title} is for ${found.area}, not ${cleaned.details.action}` },
+        { status: 400 },
+      );
+    }
+    cleaned.details.action = found.area;
     useCase = found.name;
   }
 
@@ -108,6 +128,7 @@ export async function POST(request: Request) {
   try {
     job = await createJob(
       question, models, Boolean(body?.autoApprove), pathway, search, otherModel, useCase,
+      cleaned.details,
     );
   } catch (error) {
     // The only expected failure: a store whose schema predates the params column.
