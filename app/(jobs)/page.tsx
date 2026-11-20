@@ -22,34 +22,34 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 /**
  * The new-job composer. A user picks three things:
  *
- * - a mode: why they're here. Investigate a behavior they saw; Check a model
+ * - a mode: why they're here. Diagnose a behavior they saw; Screen a model
  *   for several known behaviors before it ships; or Compare two versions of a
  *   model after a change.
  * - a behavior: what the model does, in a sentence, with real cases where it
  *   does it and the closest ones where it doesn't (components/behavior-details.tsx),
  *   or one from the library (lib/library.ts).
- * - an action: monitor it, audit it, or fix it. Check and Compare always audit.
+ * - an action: monitor it, audit it, or fix it. Screen and Compare always audit.
  *
- * Scout picks the method (pathway) from those; a leading "/" in Investigate
- * picks one directly. Check starts one audit job per behavior: there's no
+ * Scout picks the method (pathway) from those; a leading "/" in Diagnose
+ * picks one directly. Screen starts one audit job per behavior: there's no
  * combined scorecard yet. Compare runs model_diffing on the two models: it
  * doesn't rerun earlier jobs on the new one yet.
  */
 
-type Mode = "investigate" | "check" | "compare";
+type Mode = "diagnose" | "screen" | "compare";
 
 const MODES: { id: Mode; label: string; when: string; heading: string }[] = [
   {
-    id: "investigate",
-    label: "Investigate",
+    id: "diagnose",
+    label: "Diagnose",
     when: "You saw it do something",
     heading: "What did the model do?",
   },
   {
-    id: "check",
-    label: "Check",
+    id: "screen",
+    label: "Screen",
     when: "Before you ship it",
-    heading: "Which behaviors should this model be checked for?",
+    heading: "Which behaviors should this model be screened for?",
   },
   {
     id: "compare",
@@ -68,14 +68,14 @@ export default function NewJobPage() {
   const { mutate } = useSWRConfig();
   const { data } = useSWR<{ runner?: string }>("/api/jobs", fetcher);
 
-  const [mode, setMode] = useState<Mode>("investigate");
+  const [mode, setMode] = useState<Mode>("diagnose");
   const [text, setText] = useState("");
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   // The library entry the behavior was filled from, if any (remounts the examples open).
   const [fromLibrary, setFromLibrary] = useState<string | null>(null);
-  // Check mode: the library behaviors to run.
+  // Screen mode: the library behaviors to run.
   const [checked, setChecked] = useState<string[]>(["prompt_injection", "sycophancy"]);
-  // A pathway picked with "/" (Investigate only).
+  // A pathway picked with "/" (Diagnose only).
   const [slashPathway, setSlashPathway] = useState<Pathway | null>(null);
   const [scoutChooses, setScoutChooses] = useState(true);
   const [search, setSearch] = useState(false);
@@ -88,13 +88,13 @@ export default function NewJobPage() {
   const [started, setStarted] = useState<Started[] | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const pathway = mode === "compare" ? MODEL_DIFFING : mode === "investigate" ? slashPathway : null;
+  const pathway = mode === "compare" ? MODEL_DIFFING : mode === "diagnose" ? slashPathway : null;
   const compares = mode === "compare";
   const current = MODES.find((m) => m.id === mode)!;
 
-  // The slash menu: open while the box holds a single "/word" (Investigate only).
+  // The slash menu: open while the box holds a single "/word" (Diagnose only).
   const slash =
-    mode === "investigate" && !slashPathway && /^\/[\w-]*$/.test(text)
+    mode === "diagnose" && !slashPathway && /^\/[\w-]*$/.test(text)
       ? text.slice(1).toLowerCase()
       : null;
   const matches = useMemo(
@@ -110,7 +110,7 @@ export default function NewJobPage() {
     models.length > 0 &&
     !blocked &&
     slash === null &&
-    (mode === "check" ? checked.length > 0 : text.trim() !== "") &&
+    (mode === "screen" ? checked.length > 0 : text.trim() !== "") &&
     (!compares || otherModel.length === 1);
 
   function switchMode(next: Mode) {
@@ -131,7 +131,7 @@ export default function NewJobPage() {
   }
 
   function applyLibrary(entry: LibraryBehavior) {
-    if (mode === "check") {
+    if (mode === "screen") {
       setChecked((c) =>
         c.includes(entry.id) ? c.filter((id) => id !== entry.id) : [...c, entry.id],
       );
@@ -141,7 +141,7 @@ export default function NewJobPage() {
     setDraft({
       examples: entry.examples.map((c) => ({ ...c })),
       nonExamples: entry.nonExamples.map((c) => ({ ...c })),
-      action: mode === "investigate" ? entry.action : "audit",
+      action: mode === "diagnose" ? entry.action : "audit",
     });
     setFromLibrary(entry.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -154,12 +154,12 @@ export default function NewJobPage() {
       details: {
         examples: d.examples,
         non_examples: d.nonExamples,
-        action: mode === "investigate" ? d.action : "audit",
+        action: mode === "diagnose" ? d.action : "audit",
       },
       models,
       ...(compares && { otherModel: otherModel[0] }),
       autoApprove,
-      pathway: pathway?.name ?? (mode === "check" || scoutChooses ? AUTO : undefined),
+      pathway: pathway?.name ?? (mode === "screen" || scoutChooses ? AUTO : undefined),
       search,
     };
     const res = await fetch("/api/jobs", {
@@ -176,7 +176,7 @@ export default function NewJobPage() {
     if (!canStart || busy) return;
     setBusy(true);
     setError(null);
-    if (mode === "check") {
+    if (mode === "screen") {
       const results: Started[] = [];
       for (const entry of LIBRARY.filter((e) => checked.includes(e.id))) {
         const r = await post(entry.behavior, {
@@ -231,8 +231,8 @@ export default function NewJobPage() {
   }
 
   const button =
-    mode === "check"
-      ? `Check ${checked.length} behavior${checked.length === 1 ? "" : "s"}`
+    mode === "screen"
+      ? `Screen for ${checked.length} behavior${checked.length === 1 ? "" : "s"}`
       : current.label;
 
   return (
@@ -265,7 +265,7 @@ export default function NewJobPage() {
 
       <h1 className="mb-1 text-xl font-semibold tracking-tight text-zinc-100">{current.heading}</h1>
       <p className="mb-6 text-sm text-zinc-500">
-        {mode === "investigate" && (
+        {mode === "diagnose" && (
           <>
             Say what it does in a sentence and add real cases where you saw it, or start from the
             library below. Scout picks the method; type{" "}
@@ -275,14 +275,14 @@ export default function NewJobPage() {
             to pick one yourself.
           </>
         )}
-        {mode === "check" &&
+        {mode === "screen" &&
           "Pick behaviors from the library. Each runs as its own audit of the model: does it do this, and where does it come from?"}
         {mode === "compare" &&
           "Pick the version before and after the change, and the behavior you're worried about. Seesaw diffs the two models' internals on it."}
       </p>
 
       <div className="relative rounded-xl border border-zinc-800 bg-zinc-900/50 focus-within:border-zinc-600">
-        {mode === "check" ? (
+        {mode === "screen" ? (
           <CheckList checked={checked} onToggle={(e) => applyLibrary(e)} />
         ) : (
           <>
@@ -302,7 +302,7 @@ export default function NewJobPage() {
               </div>
             )}
             <label htmlFor="behavior" className="sr-only">
-              The behavior{mode === "investigate" ? ", or / for a method" : ""}
+              The behavior{mode === "diagnose" ? ", or / for a method" : ""}
             </label>
             <textarea
               id="behavior"
@@ -361,17 +361,17 @@ export default function NewJobPage() {
         {slash === null && (
           <>
             <ActionPicker
-              value={mode === "investigate" ? draft.action : "audit"}
+              value={mode === "diagnose" ? draft.action : "audit"}
               lockedBy={
-                mode === "check"
-                  ? "Check audits each behavior."
+                mode === "screen"
+                  ? "Screen audits each behavior."
                   : mode === "compare"
                     ? "Compare audits what changed."
                     : undefined
               }
               onChange={(action) => setDraft({ ...draft, action })}
             />
-            {mode !== "check" && (
+            {mode !== "screen" && (
               <BehaviorDetailsEditor
                 key={fromLibrary ?? "own"}
                 draft={draft}
@@ -409,7 +409,7 @@ export default function NewJobPage() {
             )}
           </div>
           {blocked && <span className="w-full text-xs text-amber-300">{blocked}.</span>}
-          {mode === "investigate" && !slashPathway && (
+          {mode === "diagnose" && !slashPathway && (
             <>
               <label className="sr-only" htmlFor="pathway-mode">
                 Method
@@ -479,11 +479,11 @@ export default function NewJobPage() {
 
       {slash === null && (
         <LibraryMenu
-          showLibrary={mode !== "check"}
+          showLibrary={mode !== "screen"}
           active={fromLibrary}
           onChoose={applyLibrary}
           onChoosePathway={(p) => {
-            switchMode("investigate");
+            switchMode("diagnose");
             choosePathway(p);
           }}
         />
@@ -499,7 +499,7 @@ const ACTION_TAG: Record<string, string> = {
   understand: "Audit",
 };
 
-/** Check mode's box: the library as a checklist. */
+/** Screen mode's box: the library as a checklist. */
 function CheckList({
   checked,
   onToggle,
@@ -509,7 +509,7 @@ function CheckList({
 }) {
   return (
     <fieldset className="px-4 pt-3 pb-2">
-      <legend className="sr-only">Behaviors to check</legend>
+      <legend className="sr-only">Behaviors to screen for</legend>
       <ul className="grid gap-1 sm:grid-cols-2">
         {LIBRARY.map((e) => (
           <li key={e.id}>
@@ -548,7 +548,7 @@ function BenchmarkedBadge() {
 }
 
 /**
- * Below the composer: the behavior library to start from (not in Check mode,
+ * Below the composer: the behavior library to start from (not in Screen mode,
  * where the checklist in the box is the library), then the methods.
  */
 function LibraryMenu({
@@ -615,7 +615,7 @@ function LibraryMenu({
       <section>
         <h2 className="mb-1 text-xs font-medium tracking-wide text-zinc-500 uppercase">Methods</h2>
         <p className="mb-3 text-xs text-zinc-500">
-          Scout picks one for you. To run a specific method, pick it here or type / in Investigate.
+          Scout picks one for you. To run a specific method, pick it here or type / in Diagnose.
         </p>
         <div className="flex flex-wrap gap-1.5">
           {OFFERED.map((p) => (
