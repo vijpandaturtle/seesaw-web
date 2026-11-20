@@ -47,7 +47,7 @@ const ACTION_HINT: Record<Action, string> = {
 
 /**
  * What to do about the behavior. Optional: with none picked, Scout infers it.
- * `lockedBy` fixes it (Check and Compare always audit).
+ * `lockedBy` fixes it (Screen and Compare always audit).
  */
 export function ActionPicker({
   value,
