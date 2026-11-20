@@ -105,7 +105,7 @@ function JobList({
           <p className="px-2 text-xs text-zinc-600">Loading…</p>
         ) : jobs.length === 0 ? (
           <p className="px-2 text-xs text-zinc-600">
-            No jobs yet. Ask a question or type <code>/</code> to run a pathway.
+            No jobs yet. Describe a behavior to investigate, or type <code>/</code> to run a pathway.
           </p>
         ) : (
           group(jobs).map((g) => (

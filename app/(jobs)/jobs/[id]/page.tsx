@@ -8,6 +8,7 @@ import useSWR, { useSWRConfig } from "swr";
 
 import { StageBar, StatusBadge, relativeTime } from "@/components/status";
 import { AgentTrace } from "@/components/agent-trace";
+import { behaviorOf, type BehaviorDetails } from "@/lib/behavior";
 import { AUTO, pathwayByName } from "@/lib/pathways";
 import { ModelPicker } from "@/components/model-picker";
 import { incompatibility, jobModels, shortName } from "@/lib/models";
@@ -176,6 +177,7 @@ export default function JobDetail({
             </span>
           )}
         </div>
+        <BehaviorPanel details={behaviorOf(p)} />
         {useCase && <UseCasePanel useCase={useCase} named={p.use_case === useCase.name} />}
       </header>
 
@@ -680,7 +682,7 @@ function PathwayResultView({ job }: { job: Job }) {
 }
 
 /** Params that say how the job runs rather than being a pathway input. */
-const NOT_INPUTS = ["pathway", "pathway_request", "pathway_why", "search", "rerun_of"];
+const NOT_INPUTS = ["pathway", "pathway_request", "pathway_why", "search", "rerun_of", "behavior"];
 
 function PathwayInputs({ job }: { job: Job }) {
   const params = jobParams(job);
@@ -719,6 +721,44 @@ function PathwayInputs({ job }: { job: Job }) {
  * baseline it's compared with. Until seesaw runs the baseline arm and reports
  * the outcome metric, this says so rather than implying the verdict answers it.
  */
+/** The user's action, examples and non-examples, as Scout was given them. */
+function BehaviorPanel({ details }: { details: BehaviorDetails | null }) {
+  if (!details) return null;
+  const groups = [
+    ["Where the model does it", details.examples],
+    ["Where it doesn't", details.non_examples],
+  ] as const;
+  return (
+    <details className="mt-4 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs leading-relaxed">
+      <summary className="cursor-pointer text-zinc-400">
+        From the user: {details.examples?.length ?? 0} example
+        {details.examples?.length === 1 ? "" : "s"}, {details.non_examples?.length ?? 0} where it
+        doesn&apos;t{details.action ? `; to ${details.action}` : ""}
+      </summary>
+      {groups.map(([title, cases]) =>
+        cases?.length ? (
+          <div key={title} className="mt-3">
+            <div className="text-zinc-600">{title}</div>
+            <ol className="mt-1 space-y-2">
+              {cases.map((c, i) => (
+                <li key={i} className="rounded border border-zinc-800/80 px-2.5 py-1.5">
+                  <div className="whitespace-pre-wrap text-zinc-200">{c.prompt}</div>
+                  {c.output && (
+                    <div className="mt-1 whitespace-pre-wrap text-zinc-400">
+                      <span className="text-zinc-600">Model said: </span>
+                      {c.output}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null,
+      )}
+    </details>
+  );
+}
+
 function UseCasePanel({ useCase: u, named }: { useCase: UseCase; named: boolean }) {
   const scored = u.area !== "understand";
   return (
